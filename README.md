@@ -26,7 +26,9 @@ Codex 대화 입력창에 `$grill-with-docs .hackathon/START_PROMPT.md를 읽고
 - `.agents/skills/`에 Matt Pocock의 engineering/productivity 스킬과 `implementation-brief`를 배치합니다.
 - `docs/agents/`에 로컬 Markdown 트래커와 용어 문서 위치를 설정합니다. 기존 파일과 충돌하면 **어떤 파일도 쓰기 전에 중단**합니다.
 
-Matt 전체 원본은 `vendor/matt-pocock-skills/`에 고정돼 있습니다. 기본 설치는 engineering/productivity 영역이고 `--matt core`는 필요한 10개만, `--matt none`은 새 문답 스킬만 배치합니다. Claude 전용·실험 중 스킬도 원본에는 보존하지만 기본 활성화하지 않습니다. 원본 `setup`을 다시 실행할 필요가 없습니다. 추적 방식은 로컬 Markdown으로 이미 정했습니다.
+Matt 전체 원본은 `vendor/matt-pocock-skills/`에 고정돼 있습니다. **기본 설치는 core 10개 + 자체 문답 스킬 1개**입니다. `--matt all`은 engineering/productivity 27개 + 자체 1개, `--matt none`은 자체 문답 스킬만 배치합니다. Claude 전용·실험 중 스킬도 원본에는 보존하지만 기본 활성화하지 않습니다. 원본 `setup`을 다시 실행할 필요가 없습니다. 추적 방식은 로컬 Markdown으로 이미 정했습니다.
+
+기존 요구사항 문서는 재사용하고 설치 결과와 `.hackathon/install.json`의 `requirements_path`로 정본을 알려줍니다. 후보가 여러 개거나 다른 경로라면 `install --requirements <기존경로>`를 사용하세요. 기존 내용을 덮어쓰거나 두 번째 요구사항 장부를 만들지 않습니다.
 
 ## 구현 중
 
@@ -41,11 +43,21 @@ Matt 전체 원본은 `vendor/matt-pocock-skills/`에 고정돼 있습니다. �
 실행한 테스트를 기록하려면 다음처럼 명령을 전달합니다. 명령은 셸이 아닌 인자 목록으로 실행되며, 종료 코드와 출력이 작업 공간 안에 저장됩니다.
 
 ```sh
-python3 .hackathon/tools/kit.py check --workspace . --id build -- npm run build
-python3 .hackathon/tools/kit.py check --workspace . --id tests -- npm test
+python3 .hackathon/tools/kit.py check --workspace . --id build --requirement R-001 -- npm run build
+python3 .hackathon/tools/kit.py check --workspace . --id tests --requirement R-001 --test-runner unittest -- python3 -m unittest discover -v
 ```
 
 위 명령은 예시입니다. 실제 프로젝트의 명령을 사용하세요. Browser에서의 버튼·화면 확인은 참가자가 직접 수행하고 검증 장부에 별도로 남깁니다. 이 도구는 Computer Use나 브라우저 자동 조작을 실행하지 않습니다.
+
+실제 결과 셀에 `check:tests` 같은 실행 참조를 남깁니다. 소스·수락 조건·참조 고객 답변이 달라지면 과거 실행을 현재 Verified의 근거로 재사용하지 않습니다. 0건·전부 skip은 NOT_RUN으로 구분하고 전체 실행 로그도 보존합니다. 장부 연결 검사와 실제 파일 리뷰는 다음 명령을 사용합니다. 감사 PASS가 모든 요구 충족을 뜻하지는 않습니다.
+
+```sh
+python3 .hackathon/tools/kit.py audit-requirements --workspace .
+python3 .hackathon/tools/kit.py review-scope --workspace .
+python3 .hackathon/tools/kit.py preflight --workspace .
+```
+
+[검증 명령 안내](docs/VALIDATION_TOOLS.md)에 수동 관찰 기록·판정 범위·종료 코드·기존 장부 형식을 설명합니다. 첫 흐름 완성 뒤에는 참가자도 고객 근거·구현 선택·실패 조건을 짧게 설명해 이해를 확인합니다. 답을 받지 못했다면 이해 확인 대기로 남깁니다.
 
 ## 구현 완료: 예상 문답과 복습본까지
 
@@ -84,6 +96,7 @@ python3 .hackathon/tools/kit.py verify-qa --workspace .
 - [상황별 Codex 입력 예시](docs/INPUT_EXAMPLES.md)
 - [인터뷰 종료·구현 진입·재질문 절차](docs/INTERVIEW_PROTOCOL.md)
 - [요구사항·구현·실행 근거 연결과 비공개 기록](docs/EVIDENCE_TRACKING.md)
+- [장부 감사·실행 지문·0건 테스트·수동 관찰·리뷰 대상](docs/VALIDATION_TOOLS.md)
 - [상태·생성 파일 정의](docs/QA_CONTRACT.md)
 
 준비 도구 자체의 검증:

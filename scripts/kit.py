@@ -5,15 +5,19 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
+import ipaddress
 import json
 import os
 from pathlib import Path
+import platform
 import re
+import shutil
 import signal
 import subprocess
 import sys
 from datetime import datetime, timezone
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit, unquote
 
 
 TOPICS = {
@@ -58,11 +62,15 @@ Raw conversations, execution logs and study outputs stay local and ignored. Chec
 AGENT_BLOCK = f"""{BEGIN}
 ## Cofa hackathon workflow
 
-Read `.hackathon/OPERATING_RULES.md` and `.hackathon/INTERVIEW_PROTOCOL.md` before task work. The official task README and current exam instructions take priority. Preserve the provided task files. For a personal rehearsal, use its stated rehearsal timing and monitoring conditions.
+Read `.hackathon/OPERATING_RULES.md`, `.hackathon/INTERVIEW_PROTOCOL.md`, and `.hackathon/SKILLS.md` at startup. Consult the relevant skill adjustment when changing stages. The official task README and current exam instructions take priority. Preserve the provided task files. For a personal rehearsal, use its stated rehearsal timing and monitoring conditions.
 
 Use `.hackathon/REQUIREMENTS.md`, `DECISIONS.md`, and `VERIFICATION.md` for evidence-based requirements, important choices, and actual checks. Use the local Markdown tracker in `docs/agents/issue-tracker.md`.
 
 After each customer answer, update the six discovery areas with evidence, unresolved implementation impact, next questions, and the scope ready to build. Do not end discovery after one case or acceptance criterion. Resolve important unknown business rules before implementing dependent behavior; proceed with independent confirmed work. Distinguish a convenience request from a confirmed P0. Propose customer workflow checks after the first working slice and before final scope freeze, recording actual answers rather than treating proposed questions as confirmation.
+
+Apply Matt through these project adjustments: business facts come from relayed customer answers, technical facts from local inspection. Reuse agreed public test boundaries and acceptance criteria instead of requesting approval for every test. Review committed, staged, unstaged AND untracked product files; use `review-scope` to enumerate them. The existing requirements ledger supplies the spec. If independent reviewers are unavailable, report a same-session review accurately. Do not require upstream setup, an external tracker or new global settings.
+
+Link check records to R IDs with `check --requirement R-001`; use `--test-runner unittest` or `pytest` for supported test summaries. Run `audit-requirements` before final Q&A; resolve its findings without automatically promoting statuses. At the first working slice, invite the participant to explain the requirement, implementation choice and failure condition in their own words. Do not claim understanding when they have not answered.
 
 Use only the provided Codex and allowed models. Do not update Codex, connect external AI/personal keys, use Computer Use/browser automation, push Git, send task data outside, or alter platform/proctor settings. Browser interaction is performed manually by the participant.
 
@@ -150,13 +158,36 @@ def git_base(root):
         return None
 
 
-def install(root, mode):
+def requirements_file(root, explicit=None):
+    if explicit:
+        return inside(root, explicit)
+    marker = inside(root, ".hackathon/install.json")
+    if marker.is_file():
+        chosen = load_json(marker).get("requirements_path")
+        if chosen:
+            return inside(root, chosen)
+    candidates = [inside(root, name) for name in (
+        ".hackathon/REQUIREMENTS.md", "docs/REQUIREMENTS.md", "REQUIREMENTS.md",
+        "docs/requirements.md", "requirements.md",
+    )]
+    existing = []
+    for path in candidates:
+        if path.is_file() and not any(path.samefile(p) for p in existing):
+            existing.append(path)
+    if len(existing) > 1:
+        raise KitError("요구사항 문서가 여러 개임. --requirements로 기존 정본을 지정할 것")
+    return existing[0] if existing else candidates[0]
+
+
+def install(root, mode, requirements=None):
     source = repository_root()
     if root == source:
         raise KitError("준비 레포 안이 아니라 제공된 작업 공간 루트를 --workspace로 지정할 것")
     lock = verify_vendor(source)
     plans = {}
     preserved = []
+    requirement_path = requirements_file(root, requirements)
+    requirement_relative = requirement_path.relative_to(root).as_posix()
 
     # Ignore cannot protect an already tracked private file. Never silently untrack it.
     if (root / ".git").exists():
@@ -185,10 +216,11 @@ def install(root, mode):
 
     for name in [
         "OPERATING_RULES.md", "START_PROMPT.md", "FINISH_PROMPT.md", "QA_CONTRACT.md",
-        "TIMEBOX.md", "SKILLS.md", "INPUT_EXAMPLES.md", "INTERVIEW_PROTOCOL.md", "EVIDENCE_TRACKING.md",
+        "TIMEBOX.md", "SKILLS.md", "INPUT_EXAMPLES.md", "INTERVIEW_PROTOCOL.md", "EVIDENCE_TRACKING.md", "VALIDATION_TOOLS.md",
     ]:
         plan(f".hackathon/{name}", (source / "docs" / name).read_bytes())
-    for name in ["REQUIREMENTS.md", "DECISIONS.md", "VERIFICATION.md"]:
+    plan(requirement_relative, (source / "templates/REQUIREMENTS.md").read_bytes(), preserve=True)
+    for name in ["DECISIONS.md", "VERIFICATION.md"]:
         plan(f".hackathon/{name}", (source / "templates" / name).read_bytes(), preserve=True)
     plan(".hackathon/private/INTERVIEWS.md", (
         "# 전달받은 고객 질문·답변 — 로컬 비공개\n\n"
@@ -218,12 +250,15 @@ def install(root, mode):
 
     agent_path = inside(root, "AGENTS.md")
     existing = agent_path.read_text(encoding="utf-8") if agent_path.exists() else ""
+    block = AGENT_BLOCK.replace(".hackathon/REQUIREMENTS.md", requirement_relative)
+    if requirement_relative != ".hackathon/REQUIREMENTS.md":
+        block = block.replace("## Cofa hackathon workflow", "## Cofa hackathon workflow\n\nThe requirements source of truth is `" + requirement_relative + "`; use it wherever kit guides mention `.hackathon/REQUIREMENTS.md`.")
     if BEGIN in existing or END in existing:
-        if existing.count(BEGIN) != 1 or existing.count(END) != 1 or AGENT_BLOCK.strip() not in existing:
+        if existing.count(BEGIN) != 1 or existing.count(END) != 1 or block.strip() not in existing:
             raise KitError("기존 kit 지시 블록이 다름. 내용을 보존하고 중단함")
         agent_content = existing
     else:
-        agent_content = existing + ("\n\n" if existing else "") + AGENT_BLOCK
+        agent_content = existing + ("\n\n" if existing else "") + block
     plans[agent_path] = agent_content.encode("utf-8")
 
     ignore_path = inside(root, ".gitignore")
@@ -239,6 +274,7 @@ def install(root, mode):
     kit_directory = source.relative_to(root).as_posix() if source.is_relative_to(root) else None
     manifest = {
         "schema_version": 1, "matt_commit": lock["commit"], "matt_mode": mode,
+        "requirements_path": requirement_relative,
         "kit_directory": kit_directory,
         "base_commit": previous.get("base_commit") if previous else git_base(root),
         "skills": sorted(p.name for p in skill_sources),
@@ -251,23 +287,30 @@ def install(root, mode):
         if not target.exists() or target.read_bytes() != content:
             target.write_bytes(content)
     return {"installed_skills": len(skill_sources), "preserved_ledgers": preserved,
+            "requirements_path": requirement_relative,
             "next": "Read .hackathon/START_PROMPT.md in the provided Codex."}
 
 
-def fingerprint(root):
+def fingerprint(root, for_checks=False, requirements=None):
     excluded_kit = None
+    installed_skills = set()
     marker = root / ".hackathon/install.json"
     if marker.is_file():
-        raw = load_json(marker).get("kit_directory")
+        manifest = load_json(marker)
+        raw = manifest.get("kit_directory")
+        if for_checks:
+            installed_skills = {".agents/skills/" + name for name in manifest.get("skills", [])}
         if raw:
             excluded_kit = inside(root, raw)
             if excluded_kit == root:
                 raise KitError("준비 레포 제외 경로가 전체 작업 공간을 가리킴")
+    requirement_path = requirements_file(root, requirements) if for_checks else None
     files = {}
     for directory, dirnames, filenames in os.walk(root, followlinks=False):
         current = Path(directory)
         relative_dir = current.relative_to(root).as_posix()
-        if relative_dir in {".hackathon/study", ".hackathon/tools"} or current == excluded_kit:
+        excluded = ({".hackathon", "docs/agents"} | installed_skills) if for_checks else {".hackathon/study", ".hackathon/tools"}
+        if relative_dir in excluded or current == excluded_kit:
             dirnames[:] = []
             continue
         dirnames[:] = sorted(
@@ -276,6 +319,8 @@ def fingerprint(root):
         )
         for name in sorted(filenames):
             path = current / name
+            if path == requirement_path:
+                continue
             if name == ".DS_Store" or name.endswith((".pyc", ".pyo")):
                 continue
             relative = path.relative_to(root).as_posix()
@@ -291,16 +336,248 @@ def fingerprint(root):
     return {"digest": digest_bytes(canonical.encode("utf-8")), "file_count": len(files)}
 
 
-def record_check(root, check_id, command, timeout):
+REQUIREMENT_FIELDS = {
+    "id": ("id", "requirementid"),
+    "description": ("요구사항", "description", "requirement"),
+    "status": ("상태", "status"),
+    "source": ("고객근거q/공식과제위치", "customerevidence", "source"),
+    "acceptance": ("관찰가능한수락조건", "acceptancecriteria", "acceptance"),
+    "files": ("실제구현파일", "implementationfiles", "implementation"),
+    "procedure": ("검증절차v/명령·테스트", "verificationprocedure", "test"),
+    "actual": ("실제결과·실행기록", "actualverificationresult", "evidence"),
+    "remaining": ("남은질문·문제", "remainingissues"),
+}
+EMPTY = {"", "—", "-", "없음", "미확인", "미실행", "해당없음", "todo", "n/a"}
+
+
+def field_text(value):
+    return value.strip().strip("`*").strip()
+
+
+def requirement_rows(root, explicit=None):
+    path = requirements_file(root, explicit)
+    if not path.is_file():
+        raise KitError("요구사항 문서 없음: " + path.relative_to(root).as_posix())
+    rows, errors, columns = [], [], None
+    fenced = False
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+            columns = None
+            continue
+        if fenced or not line.strip().startswith("|"):
+            columns = None
+            continue
+        cells = [field_text(x.replace(r"\|", "|")) for x in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+        if all(re.fullmatch(r":?-+:?", c.replace(" ", "")) for c in cells):
+            continue
+        normalized = [re.sub(r"\s+", "", c).lower() for c in cells]
+        if normalized[0] in REQUIREMENT_FIELDS["id"]:
+            columns = {key: normalized.index(alias) for key, aliases in REQUIREMENT_FIELDS.items()
+                       for alias in aliases if alias in normalized}
+            width = len(cells)
+            required = set(REQUIREMENT_FIELDS) - {"remaining"}
+            if not required <= columns.keys():
+                errors.append(f"행 {number}: 지원 표의 필수 열 누락: {', '.join(sorted(required - columns.keys()))}")
+                columns = None
+            continue
+        if columns is not None:
+            if len(cells) != width:
+                errors.append(f"행 {number}: 표 열 수 불일치. 셀 안의 |는 \\|로 작성")
+                continue
+            rows.append({**{key: cells[index] for key, index in columns.items()}, "line": number})
+    return path, rows, errors
+
+
+def q_ids(text):
+    result = {str(int(n)) for n in re.findall(r"(?<![\w])Q(\d+)\b", text, re.I)}
+    for left, right in re.findall(r"\bQ(\d+)\s*[~–-]\s*Q?(\d+)\b", text, re.I):
+        a, b = int(left), int(right)
+        if b < a or b - a > 1000:
+            raise KitError("Q번호 범위가 잘못되거나 너무 큼")
+        result.update(str(n) for n in range(a, b + 1))
+    return result
+
+
+def customer_answers(root):
+    path = inside(root, ".hackathon/private/INTERVIEWS.md")
+    if not path.is_file():
+        return {}
+    visible, fenced = [], False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        elif not fenced:
+            visible.append(line)
+    sections = re.split(r"(?m)^(?=#{1,6}\s)", "\n".join(visible))
+    answers = {}
+    for section in sections:
+        title, _, body = section.partition("\n")
+        found = re.match(r"^#{1,6}\s+Q(\d+)\b", title, re.I)
+        if not found or re.search(r"대기|미수신|pending", title, re.I):
+            continue
+        labeled = re.search(r"(?im)^\s*(?:답변|answer)\s*:\s*(.+)", body)
+        received = (re.search(r"답변|응답|answer", title, re.I) and body.strip()) or (
+            labeled and field_text(labeled[1]).lower() not in EMPTY
+            and not re.search(r"^(?:답변\s*)?대기|^pending|^미수신", labeled[1], re.I))
+        if received:
+            key = str(int(found[1]))
+            if key in answers:
+                raise KitError("고객 원문에 중복 Q번호: Q" + key)
+            answers[key] = section.strip()
+    return answers
+
+
+def binding_digest(row, answers):
+    content = {k: row[k] for k in ("id", "description", "source", "acceptance")}
+    content["customer_answers"] = {q: digest_bytes(answers[q].encode()) if q in answers else None
+                                   for q in sorted(q_ids(row["source"]))}
+    return digest_bytes(json_bytes(content))
+
+
+def requirement_bindings(root, ids, explicit=None):
+    if not ids:
+        return {}
+    _, rows, errors = requirement_rows(root, explicit)
+    if errors:
+        raise KitError("; ".join(errors))
+    answers = customer_answers(root)
+    bindings = {}
+    for identifier in ids:
+        matched = [r for r in rows if r["id"] == identifier]
+        if len(matched) != 1:
+            raise KitError("고유한 요구사항을 찾을 수 없음: " + identifier)
+        bindings[identifier] = binding_digest(matched[0], answers)
+    return bindings
+
+
+def file_references(value):
+    # Human-readable file/function references, not commands or arbitrary URLs.
+    found = re.findall(r"\[[^\]]*\]\(<?([^)>]+)>?\)", value)
+    value = re.sub(r"https?://\S+", "", value)
+    found += re.findall(r"`([^`]+)`", value)
+    found += re.findall(r"(?<![\w/.-])(?:\.?[\w.-]+/)*[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,10}", value)
+    result = set()
+    for name in found:
+        name = unquote(name).split("#", 1)[0].split(":", 1)[0].strip()
+        if name and not name.startswith(("http", "check", "manual")):
+            result.add(name)
+    return result
+
+
+def audit_requirements(root, explicit=None):
+    path, rows, errors = requirement_rows(root, explicit)
+    warnings, seen = [], set()
+    answers = customer_answers(root)
+    current = fingerprint(root, for_checks=True, requirements=explicit)["digest"]
+    for row in rows:
+        rid = row["id"]
+        def issue(message):
+            errors.append(rid + ": " + message)
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*\d+", rid) or rid.lower() in seen:
+            issue("ID 형식이 잘못되거나 중복됨")
+        seen.add(rid.lower())
+        status = row["status"].lower()
+        if status not in {"proposed", "confirmed", "implemented", "verified", "blocked"}:
+            issue("지원하지 않는 상태")
+        for key in ("description", "acceptance"):
+            if row[key].lower() in EMPTY:
+                (warnings if status == "proposed" else errors).append(rid + ": 빈 " + key)
+        if status != "proposed":
+            refs = q_ids(row["source"])
+            for q in refs:
+                if q not in answers:
+                    issue("실제 답변 절이 없는 고객 근거: Q" + q)
+            sources = file_references(row["source"])
+            if not refs and not sources:
+                issue("고객 Q 또는 공식 과제 파일 근거 필요")
+            for source in sources:
+                if not inside(root, source).is_file():
+                    issue("근거 파일 없음: " + source)
+        if status in {"implemented", "verified"}:
+            files = file_references(row["files"])
+            if not files:
+                issue("실제 구현 파일 경로 필요")
+            for name in files:
+                if not inside(root, name).is_file():
+                    issue("구현 파일 없음: " + name)
+        if status == "verified":
+            if row["procedure"].lower() in EMPTY:
+                issue("검증 절차 필요")
+            if re.search(r"미실행|미검증|대기|NOT_RUN|NOT_TESTED", row["actual"] + " " + row.get("remaining", ""), re.I):
+                issue("미실행·미검증·대기 기록과 Verified가 불일치")
+            ids = re.findall(r"\b(check|manual):([a-z0-9][a-z0-9_-]{0,63})\b", row["actual"])
+            if not ids:
+                issue("실제 결과 셀에 check:<실행ID> 또는 manual:<관찰ID> 필요")
+            for kind, check_id in ids:
+                try:
+                    record = load_json(inside(root, f".hackathon/checks/{check_id}.json"))
+                except KitError:
+                    issue("실행/관찰 기록을 읽을 수 없음: " + check_id)
+                    continue
+                if not isinstance(record, dict):
+                    issue("실행 기록 객체 형식이 잘못됨: " + check_id)
+                    continue
+                if record.get("id") != check_id or record.get("result") != "PASS":
+                    issue("통과한 실행/관찰이 아님: " + check_id)
+                if kind == "manual" and record.get("kind") != "participant-attestation":
+                    issue("수동 관찰 기록이 아님: " + check_id)
+                if kind == "check" and (record.get("kind") != "executed-command" or record.get("exit_code") != 0):
+                    issue("명령 실행 근거가 아님: " + check_id)
+                if not record.get("stable_source") or record.get("source_after") != current:
+                    issue("실행 당시 소스와 다름. 재검증 필요: " + check_id)
+                bindings = record.get("requirements", {})
+                if not isinstance(bindings, dict) or bindings.get(rid) != binding_digest(row, answers):
+                    issue("해당 요구·수락 조건·고객 근거와 연결되지 않음: " + check_id)
+    return {"status": "FAIL" if errors else "NOT_RUN" if not rows else "PASS",
+            "requirements_path": path.relative_to(root).as_posix(), "requirements": len(rows),
+            "not_marked_verified": [r["id"] for r in rows if r["status"].lower() != "verified"],
+            "errors": errors, "warnings": warnings,
+            "scope": "Reference structure and recorded freshness only; no semantic coverage, customer authenticity or understanding guarantee."}
+
+
+def test_summary(command, output, runner):
+    if runner == "auto":
+        names = [Path(x).name for x in command]
+        modules = {right for left, right in zip(names, names[1:]) if left == "-m"}
+        runner = "pytest" if names[0].startswith("pytest") or "pytest" in modules else (
+            "unittest" if "unittest" in modules else "none")
+    text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", output)
+    total = skipped = None
+    if runner == "unittest":
+        ran = re.findall(r"(?m)^Ran (\d+) tests?\b", text)
+        if ran:
+            total = int(ran[-1])
+            skipped_rows = re.findall(r"(?m)^(?:OK|FAILED)\s*\([^\n]*\bskipped=(\d+)", text)
+            skipped = int(skipped_rows[-1]) if skipped_rows else 0
+    elif runner == "pytest":
+        summaries = [line for line in text.splitlines() if re.search(r"\b\d+ (?:passed|failed|skipped|errors?|xfailed|xpassed)\b.*\bin \d", line)]
+        if summaries:
+            counts = {key: int(n) for n, key in re.findall(r"\b(\d+) (passed|failed|skipped|errors?|xfailed|xpassed)\b", summaries[-1])}
+            total, skipped = sum(counts.values()), counts.get("skipped", 0)
+        elif re.search(r"\bno tests ran\b", text):
+            total = skipped = 0
+    state = "NOT_APPLICABLE" if runner == "none" else "UNKNOWN" if total is None else (
+        "NOT_RUN" if total <= skipped else "RAN")
+    return {"runner": runner, "state": state, "total": total, "skipped": skipped,
+            "effective": total - skipped if total is not None else None}
+
+
+def record_check(root, check_id, command, timeout, runner="auto", requirement_ids=(), requirements=None):
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", check_id):
         raise KitError("체크 ID에는 소문자·숫자·밑줄·하이픈만 사용")
     if command and command[0] == "--":
         command = command[1:]
     if not command:
         raise KitError("실행할 명령이 없음")
+    if timeout <= 0:
+        raise KitError("timeout은 양수")
     output = inside(root, f".hackathon/checks/{check_id}.json")
-    if output.exists():
+    log_path = inside(root, f".hackathon/checks/{check_id}.log")
+    if output.exists() or log_path.exists():
         raise KitError("이미 있는 실행 기록은 보존함. tests-02처럼 새 ID 사용")
+    bindings = requirement_bindings(root, requirement_ids, requirements)
+    before = fingerprint(root, for_checks=True, requirements=requirements)["digest"]
     started = utc_now()
     timed_out = False
     try:
@@ -316,16 +593,113 @@ def record_check(root, check_id, command, timeout):
             exit_code = 124
     except OSError as exc:
         stdout, stderr, exit_code = "", str(exc), 127
+    after = fingerprint(root, for_checks=True, requirements=requirements)["digest"]
+    summary = test_summary(command, stdout + "\n" + stderr, runner)
+    result = "FAIL" if exit_code and not (exit_code == 5 and summary["runner"] in {"pytest", "unittest"} and summary["state"] == "NOT_RUN") else (
+        "NOT_RUN" if summary["state"] == "NOT_RUN" else
+        "UNVERIFIED" if before != after or summary["state"] == "UNKNOWN" else "PASS")
     record = {
+        "schema_version": 2, "kind": "executed-command", "result": result,
         "id": check_id, "command": command, "cwd": ".", "started_at": started,
         "finished_at": utc_now(), "exit_code": exit_code, "timed_out": timed_out,
         "stdout": stdout[-32000:], "stderr": stderr[-32000:],
         "output_truncated": len(stdout) > 32000 or len(stderr) > 32000,
+        "log": log_path.relative_to(root).as_posix(), "tests": summary,
+        "source_before": before, "source_after": after, "stable_source": before == after,
+        "requirements": bindings,
     }
     # A test command can create files, so check the output route again afterwards.
     output = inside(root, f".hackathon/checks/{check_id}.json")
+    log_path = inside(root, f".hackathon/checks/{check_id}.log")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("x", encoding="utf-8") as log:
+        log.write("STDOUT\n" + stdout + "\nSTDERR\n" + stderr)
     write_json(output, record)
     return record
+
+
+def record_manual(root, check_id, result, note, requirement_ids=(), requirements=None):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", check_id) or not note.strip():
+        raise KitError("관찰 ID와 참가자가 보고한 구체적인 관찰 내용 필요")
+    if result not in {"PASS", "FAIL", "NOT_RUN"}:
+        raise KitError("수동 결과는 PASS/FAIL/NOT_RUN")
+    target = inside(root, f".hackathon/checks/{check_id}.json")
+    if target.exists() or inside(root, f".hackathon/checks/{check_id}.log").exists():
+        raise KitError("이미 있는 실행/관찰 ID는 보존함")
+    stamp = fingerprint(root, for_checks=True, requirements=requirements)["digest"]
+    record = {"schema_version": 2, "kind": "participant-attestation", "id": check_id,
+              "result": result, "observer": "participant", "recorded_at": utc_now(),
+              "note": note, "source_before": stamp, "source_after": stamp, "stable_source": True,
+              "requirements": requirement_bindings(root, requirement_ids, requirements),
+              "scope": "Participant reports this observation for the current source. No automated observation or browser action."}
+    write_json(target, record)
+    return record
+
+
+def review_scope(root, base=None):
+    def git(*args):
+        return subprocess.run(["git", "-C", str(root), *args], capture_output=True,
+                              text=True, timeout=10, check=False)
+    try:
+        top = git("rev-parse", "--show-toplevel")
+        if top.returncode:
+            return {"status": "UNAVAILABLE", "reason": "Git 작업 공간 아님. 실제 파일을 직접 검토할 것"}
+        if Path(top.stdout.strip()).resolve() != root:
+            return {"status": "UNAVAILABLE", "reason": "--workspace가 Git 루트와 다름. 과제의 실제 Git 루트를 지정하거나 파일을 직접 검토할 것"}
+    except FileNotFoundError:
+        return {"status": "UNAVAILABLE", "reason": "Git 없음. 실제 파일을 직접 검토할 것"}
+    marker = inside(root, ".hackathon/install.json")
+    if not base and marker.is_file():
+        base = load_json(marker).get("base_commit")
+    base = base or git_base(root)
+    if base:
+        resolved = git("rev-parse", "--verify", "--end-of-options", base + "^{commit}")
+        if resolved.returncode or not re.fullmatch(r"[0-9a-f]{40,64}\s*", resolved.stdout):
+            raise KitError("리뷰 기준 커밋을 찾을 수 없음")
+        base = resolved.stdout.strip()
+    files = set()
+    for args in (["diff", "--name-only", "-z", base, "--"] if base else ["diff", "--name-only", "-z", "--"],
+                 ["diff", "--cached", "--name-only", "-z", "--"],
+                 ["ls-files", "--others", "--exclude-standard", "-z"]):
+        value = git(*args)
+        if value.returncode:
+            raise KitError("리뷰 대상 열거 실패: " + value.stderr.strip())
+        files.update(name for name in value.stdout.split("\0") if name)
+    return {"status": "ENUMERATED", "base_commit": base, "files": sorted(files),
+            "scope": "Committed + staged + unstaged + untracked paths only. Not a code review verdict."}
+
+
+def preflight(root, url=None):
+    path = requirements_file(root)
+    report = {"status": "OBSERVED", "python": platform.python_version(),
+              "tools": {name: shutil.which(name) is not None for name in ("git", "node", "npm")},
+              "requirements_path": path.relative_to(root).as_posix(), "requirements_exists": path.is_file(),
+              "http": {"result": "NOT_RUN"}, "scope": "Read-only environment observation; not UI usability or submission readiness."}
+    if url:
+        try:
+            target = urlsplit(url)
+            host, port = target.hostname or "", target.port
+        except ValueError as exc:
+            raise KitError("잘못된 로컬 URL") from exc
+        try:
+            local = host == "localhost" or ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            local = False
+        if target.scheme not in {"http", "https"} or not local or target.username or target.password:
+            raise KitError("preflight URL은 인증정보 없는 로컬 loopback HTTP(S)만 허용")
+        connection = (http.client.HTTPSConnection if target.scheme == "https" else http.client.HTTPConnection)(
+            host, port, timeout=3)
+        try:
+            connection.request("GET", (target.path or "/") + ("?" + target.query if target.query else ""))
+            response = connection.getresponse()
+            report["http"] = {"result": "PASS" if 200 <= response.status < 300 else "FAIL",
+                              "status_code": response.status, "url": url,
+                              "notice": "No redirects followed; response body not recorded."}
+        except (OSError, http.client.HTTPException) as exc:
+            report["http"] = {"result": "FAIL", "error": type(exc).__name__}
+        finally:
+            connection.close()
+    return report
 
 
 def qa_path(root):
@@ -413,8 +787,15 @@ def validate_qa(root):
             if not isinstance(check_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", check_id):
                 raise KitError(f"{identifier}: 잘못된 체크 ID")
             record = load_json(inside(root, f".hackathon/checks/{check_id}.json"))
-            if record.get("id") != check_id or type(record.get("exit_code")) is not int:
+            if not isinstance(record, dict) or record.get("id") != check_id:
                 raise KitError(f"{identifier}: 잘못된 실행 기록")
+            if record.get("kind") == "participant-attestation":
+                if record.get("observer") != "participant" or record.get("result") not in {"PASS", "FAIL", "NOT_RUN"}:
+                    raise KitError(f"{identifier}: 잘못된 참가자 관찰 기록")
+                nonempty(record.get("note"), f"{identifier}.manual.note")
+                nonempty(record.get("recorded_at"), f"{identifier}.manual.recorded_at")
+            elif type(record.get("exit_code")) is not int or not record.get("finished_at"):
+                raise KitError(f"{identifier}: 잘못된 명령 실행 기록")
         limits = question.get("limitations")
         if not isinstance(limits, list) or not limits:
             raise KitError(f"{identifier}: 한계 또는 미검증 범위를 명시할 것")
@@ -441,7 +822,10 @@ def render_content(root, data):
             full.append(f"- [{label}]({link}): {ref['quote']}\n")
         for check_id in question.get("check_ids", []):
             record = load_json(root / f".hackathon/checks/{check_id}.json")
-            full.append(f"- 실행 `{check_id}`: exit={record['exit_code']}, {record['finished_at']}\n")
+            if record.get("kind") == "participant-attestation":
+                full.append(f"- 참가자 수동 진술 `{check_id}`: {record['result']}, {record['recorded_at']} · {record['note']}\n")
+            else:
+                full.append(f"- 실행 `{check_id}`: {record.get('result', 'legacy/unassessed')}, exit={record['exit_code']}, {record['finished_at']}\n")
         full.append("\n한계: " + " / ".join(question["limitations"]) + "\n")
         if question["priority"] == "core":
             short.extend([heading, question["short_answer"] + "\n"])
@@ -465,14 +849,27 @@ def render_qa(root, verify_only=False):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="action", required=True)
-    for action in ["install", "fingerprint", "check", "prepare-qa", "render-qa", "verify-qa"]:
+    for action in ["install", "fingerprint", "check", "manual-check", "audit-requirements", "preflight", "review-scope", "prepare-qa", "render-qa", "verify-qa"]:
         sub = commands.add_parser(action)
         sub.add_argument("--workspace", default=".")
         if action == "install":
-            sub.add_argument("--matt", choices=["all", "core", "none"], default="all")
+            sub.add_argument("--matt", choices=["all", "core", "none"], default="core")
+        if action in {"install", "check", "manual-check", "audit-requirements"}:
+            sub.add_argument("--requirements", help="기존 요구사항 Markdown 정본 경로")
+        if action in {"check", "manual-check"}:
+            sub.add_argument("--requirement", action="append", default=[], help="연결할 R ID (반복 가능)")
+        if action == "manual-check":
+            sub.add_argument("--id", required=True)
+            sub.add_argument("--result", choices=["PASS", "FAIL", "NOT_RUN"], required=True)
+            sub.add_argument("--note", required=True)
+        if action == "preflight":
+            sub.add_argument("--url", help="선택: 이미 실행 중인 로컬 서버 주소")
+        if action == "review-scope":
+            sub.add_argument("--base", help="설치 시 기준 대신 사용할 Git commit/ref")
         if action == "check":
             sub.add_argument("--id", required=True)
             sub.add_argument("--timeout", type=int, default=300)
+            sub.add_argument("--test-runner", choices=["auto", "none", "unittest", "pytest"], default="auto")
             sub.add_argument("command", nargs=argparse.REMAINDER)
     commands.add_parser("verify-vendor")
     args = parser.parse_args(argv)
@@ -485,15 +882,32 @@ def main(argv=None):
             if not root.is_dir():
                 raise KitError("작업 공간이 존재하지 않음")
             if args.action == "install":
-                result = install(root, args.matt)
+                result = install(root, args.matt, args.requirements)
             elif args.action == "fingerprint":
                 result = fingerprint(root)
             elif args.action == "check":
                 if args.timeout <= 0:
                     raise KitError("timeout은 양수")
-                result = record_check(root, args.id, args.command, args.timeout)
+                result = record_check(root, args.id, args.command, args.timeout,
+                                      args.test_runner, args.requirement, args.requirements)
                 print(json.dumps(result, ensure_ascii=False, indent=2))
+                if result["exit_code"] == 0 and result["result"] != "PASS":
+                    return 2
                 return result["exit_code"] if result["exit_code"] >= 0 else 128 - result["exit_code"]
+            elif args.action == "manual-check":
+                result = record_manual(root, args.id, args.result, args.note, args.requirement, args.requirements)
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return {"PASS": 0, "FAIL": 1, "NOT_RUN": 2}[result["result"]]
+            elif args.action == "audit-requirements":
+                result = audit_requirements(root, args.requirements)
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return {"PASS": 0, "FAIL": 1, "NOT_RUN": 2}[result["status"]]
+            elif args.action == "review-scope":
+                result = review_scope(root, args.base)
+            elif args.action == "preflight":
+                result = preflight(root, args.url)
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return 1 if result["http"]["result"] == "FAIL" else 0
             elif args.action == "prepare-qa":
                 result = prepare_qa(root)
             else:

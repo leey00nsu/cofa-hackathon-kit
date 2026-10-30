@@ -5,7 +5,7 @@
 ```text
 $grill-with-docs
 
-현재 작업 공간의 공식 README·과제 안내와 AGENTS.md를 먼저 읽고, .hackathon/OPERATING_RULES.md와 .hackathon/INTERVIEW_PROTOCOL.md를 적용해라.
+현재 작업 공간의 공식 README·과제 안내와 AGENTS.md를 먼저 읽고, .hackathon/OPERATING_RULES.md, .hackathon/INTERVIEW_PROTOCOL.md, .hackathon/SKILLS.md를 읽어 적용해라.
 제공된 Codex·허용 모델을 그대로 사용하며 업데이트하지 마라. 외부 AI·개인 키·Computer Use·Git Push·외부 전송은 사용하지 마라.
 
 공식 과제의 필수 파일·제출 위치·실행 방법을 우선 파악하라. 제공 파일과 README를 보존하라.
@@ -24,6 +24,7 @@ EVIDENCE_TRACKING.md를 적용하라. 질문·실제 답변 원문은 .hackathon
 Matt 스킬은 필요한 것만 선택하라. 인터뷰의 질문 수와 설계 확정을 무제한 늘리지 마라.
 기술 선택의 이유·기각한 대안은 .hackathon/DECISIONS.md, 실제 검증과 한계는 .hackathon/VERIFICATION.md에 짧게 기록하라.
 기존 R번호로 결정·구현 파일·실제 테스트와 결과를 연결하라. 전체 수락 조건의 실행 근거가 있어야 Verified이며 미실행·화면 확인 대기는 통과가 아니다. 필요한 스킬만 사용하고 기존 장부를 중복 작성하지 마라.
+요구사항 정본은 설치 결과/manifest의 requirements_path를 따르라. 검증 명령은 VALIDATION_TOOLS.md를 참고해 관련 R번호·실행 지문·실제 결과를 연결하라. 테스트 0건/전부 skip을 성공으로 설명하지 마라. 첫 작동 흐름 뒤에는 내 직접 설명도 제안하되 미응답이면 대기로 남기고 독립 작업을 이어가라.
 Browser 조작은 내가 직접 한다. CLI 검증은 실행한 명령·결과만 기록하라.
 
 완료에는 실제 구현·검증뿐 아니라, $implementation-brief로 만든 구현 기반 예상 문답과 마지막 복습본도 포함된다.

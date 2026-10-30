@@ -20,3 +20,13 @@
 - https://skhynix-hackathon.com/ai-2026
 - https://learn.chatgpt.com/docs/build-skills
 - https://learn.chatgpt.com/docs/agent-configuration/agents-md
+
+## 검증 보완 설계에서 참고한 공개 사례
+
+다음 저장소의 설계 원리를 비교했다. 코드·스킬 원문을 복사하거나 자동 설치하지 않고 기존 `scripts/kit.py`와 장부에 독립 구현했다. 해당 프로젝트의 실환경 호환성·성능 주장을 이 키트의 검증 결과로 사용하지 않는다.
+
+- https://github.com/arcturus0637-rgb/cofa-prelim-kit — 요구와 최신 성공 근거 연결.
+- https://github.com/Navv6/ank-probe-harness — 소스/계획 변경 후 근거 재검토.
+- https://github.com/phy0916/cofa-probe-starter — 장부 필수 필드와 중복 참조 검사.
+- https://github.com/hongkevin/cofathon-prep — 검사 0건과 통과 구분.
+- https://github.com/hamjoon2003/sk-hynix-2nd-harness — unittest 실행 수와 skip 관찰.
