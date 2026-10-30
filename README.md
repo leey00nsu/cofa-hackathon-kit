@@ -14,7 +14,9 @@ codex
 
 설치에는 Python 3.10 이상이 필요합니다. 설치기는 네트워크 요청·패키지 설치·Codex 업데이트를 하지 않습니다. 이미 제공된 Python이 없다면 `.hackathon-kit/docs/START_PROMPT.md`와 `docs/OPERATING_RULES.md`를 Codex에게 직접 읽게 하고, 필요한 문서·스킬을 제공된 환경에서 배치하게 하세요. Python 설치나 플랫폼 변경을 강제하지 않습니다.
 
-Codex에서 `.hackathon/START_PROMPT.md`의 지시로 시작하세요. 이미 Codex가 실행 중이면 새 세션을 시작하거나 새 운영 지시를 명시적으로 읽게 합니다. `/status`, `/model`, `/skills`의 실제 지원 여부와 모델 표기는 제공된 환경에서 확인합니다. 선택은 참가 안내의 허용 모델 중에서 합니다.
+Codex 대화 입력창에 `$grill-with-docs .hackathon/START_PROMPT.md를 읽고 시작 지시에 따라 진행해`라고 입력해 시작하세요. 이미 Codex가 실행 중이면 새 세션을 시작하거나 새 운영 지시를 명시적으로 읽게 합니다. `/status`, `/model`, `/skills`의 실제 지원 여부와 모델 표기는 제공된 환경에서 확인합니다. 선택은 참가 안내의 허용 모델 중에서 합니다.
+
+평소에는 자연어로 대화하고 단계가 바뀔 때 핵심 스킬을 한 번씩 호출합니다. **[상황별 입력 예시](docs/INPUT_EXAMPLES.md)**에서 고객 답변 전달·구현 시작·오류 수정·마지막 문답 생성에 사용할 문장을 확인하세요. 설치 후에는 같은 안내가 `.hackathon/INPUT_EXAMPLES.md`에도 배치됩니다.
 
 설치기는 다음을 준비합니다.
 
@@ -72,6 +74,7 @@ python3 .hackathon/tools/kit.py verify-qa --workspace .
 - [180분 작업 운영](docs/TIMEBOX.md)
 - [운영 규칙과 출처](docs/OPERATING_RULES.md)
 - [스킬 사용법](docs/SKILLS.md)
+- [상황별 Codex 입력 예시](docs/INPUT_EXAMPLES.md)
 - [상태·생성 파일 정의](docs/QA_CONTRACT.md)
 
 준비 도구 자체의 검증:

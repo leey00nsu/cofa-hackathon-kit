@@ -146,7 +146,7 @@ def install(root, mode):
 
     for name in [
         "OPERATING_RULES.md", "START_PROMPT.md", "FINISH_PROMPT.md", "QA_CONTRACT.md",
-        "TIMEBOX.md", "SKILLS.md",
+        "TIMEBOX.md", "SKILLS.md", "INPUT_EXAMPLES.md",
     ]:
         plan(f".hackathon/{name}", (source / "docs" / name).read_bytes())
     for name in ["REQUIREMENTS.md", "DECISIONS.md", "VERIFICATION.md"]:

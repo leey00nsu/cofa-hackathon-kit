@@ -1,8 +1,10 @@
 # 시작 지시
 
-아래를 제공된 Codex에서 사용한다. 이미 공개된 이 지시 파일을 직접 읽게 해도 된다.
+아래를 제공된 Codex의 대화 입력창에서 사용한다. 짧게 시작하려면 `$grill-with-docs .hackathon/START_PROMPT.md를 읽고 시작 지시에 따라 진행해`라고 입력한다. 이후의 상황별 문장은 [입력 예시](INPUT_EXAMPLES.md)를 참고한다.
 
 ```text
+$grill-with-docs
+
 현재 작업 공간의 공식 README·과제 안내와 AGENTS.md를 먼저 읽고, .hackathon/OPERATING_RULES.md를 적용해라.
 제공된 Codex·허용 모델을 그대로 사용하며 업데이트하지 마라. 외부 AI·개인 키·Computer Use·Git Push·외부 전송은 사용하지 마라.
 
