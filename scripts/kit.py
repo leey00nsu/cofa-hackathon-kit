@@ -37,9 +37,11 @@ END = "<!-- cofa-hackathon-kit:end -->"
 AGENT_BLOCK = f"""{BEGIN}
 ## Cofa hackathon workflow
 
-Read `.hackathon/OPERATING_RULES.md` before task work. The official task README and current exam instructions take priority. Preserve the provided task files.
+Read `.hackathon/OPERATING_RULES.md` and `.hackathon/INTERVIEW_PROTOCOL.md` before task work. The official task README and current exam instructions take priority. Preserve the provided task files. For a personal rehearsal, use its stated rehearsal timing and monitoring conditions.
 
 Use `.hackathon/REQUIREMENTS.md`, `DECISIONS.md`, and `VERIFICATION.md` for evidence-based requirements, important choices, and actual checks. Use the local Markdown tracker in `docs/agents/issue-tracker.md`.
+
+After each customer answer, update the six discovery areas with evidence, unresolved implementation impact, next questions, and the scope ready to build. Do not end discovery after one case or acceptance criterion. Resolve important unknown business rules before implementing dependent behavior; proceed with independent confirmed work. Distinguish a convenience request from a confirmed P0. Propose customer workflow checks after the first working slice and before final scope freeze, recording actual answers rather than treating proposed questions as confirmation.
 
 Use only the provided Codex and allowed models. Do not update Codex, connect external AI/personal keys, use Computer Use/browser automation, push Git, send task data outside, or alter platform/proctor settings. Browser interaction is performed manually by the participant.
 
@@ -102,7 +104,8 @@ def verify_vendor(root):
     lock = load_json(root / "vendor" / "snapshot.json")
     base = root / "vendor" / "matt-pocock-skills"
     actual_paths = {
-        p.relative_to(base).as_posix() for p in base.rglob("*") if p.is_file()
+        p.relative_to(base).as_posix() for p in base.rglob("*")
+        if p.is_file() and p.name != ".DS_Store"
     }
     if actual_paths != set(lock["files"]):
         raise KitError("Matt 원본 파일 목록이 고정본과 다름")
@@ -146,7 +149,7 @@ def install(root, mode):
 
     for name in [
         "OPERATING_RULES.md", "START_PROMPT.md", "FINISH_PROMPT.md", "QA_CONTRACT.md",
-        "TIMEBOX.md", "SKILLS.md", "INPUT_EXAMPLES.md",
+        "TIMEBOX.md", "SKILLS.md", "INPUT_EXAMPLES.md", "INTERVIEW_PROTOCOL.md",
     ]:
         plan(f".hackathon/{name}", (source / "docs" / name).read_bytes())
     for name in ["REQUIREMENTS.md", "DECISIONS.md", "VERIFICATION.md"]:
@@ -166,7 +169,7 @@ def install(root, mode):
         for entry in sorted(skill.rglob("*")):
             if entry.is_symlink():
                 raise KitError(f"스킬 원본의 심볼릭 링크: {entry}")
-            if entry.is_file():
+            if entry.is_file() and entry.name != ".DS_Store":
                 relative = entry.relative_to(skill).as_posix()
                 plan(f".agents/skills/{skill.name}/{relative}", entry.read_bytes())
     plan(".agents/skills/MATT_LICENSE.txt", (source / "vendor/matt-pocock-skills/LICENSE").read_bytes())

@@ -1,6 +1,7 @@
 """Behavioral checks for preservation, real execution evidence, and stale Q&A."""
 
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -62,6 +63,19 @@ class KitTests(unittest.TestCase):
     def test_install_rejects_kit_checkout_as_the_task_root(self):
         with self.assertRaisesRegex(kit.KitError, "작업 공간 루트"):
             kit.install(KIT_PATH.parents[1], "none")
+
+    def test_vendor_allows_finder_metadata_but_rejects_untracked_source(self):
+        vendor = self.root / "vendor/matt-pocock-skills"
+        (vendor / "skills").mkdir(parents=True)
+        (vendor / "LICENSE").write_bytes(b"fixture license")
+        lock = {"commit": "fixture", "files": {"LICENSE": hashlib.sha256(b"fixture license").hexdigest()}}
+        (self.root / "vendor/snapshot.json").write_bytes(kit.json_bytes(lock))
+        (vendor / ".DS_Store").write_bytes(b"finder metadata")
+        (vendor / "skills/.DS_Store").write_bytes(b"finder metadata")
+        self.assertEqual(kit.verify_vendor(self.root)["commit"], "fixture")
+        (vendor / "unexpected.sh").write_text("echo unexpected")
+        with self.assertRaisesRegex(kit.KitError, "파일 목록"):
+            kit.verify_vendor(self.root)
 
     def test_conflict_is_detected_before_any_install_write(self):
         target = self.root / "docs/agents"

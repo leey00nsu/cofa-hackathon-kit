@@ -7,7 +7,7 @@ description: Build evidence-based implementation Q&A and a short review sheet be
 
 이 스킬은 **과제풀이 단계**의 구현 완료·설명 준비용이다. 제출물 확정 후, 후속 서술형 중 또는 실제 서술형 문제의 답변 요청이면 AI 답변을 생성하지 않고 참가자가 직접 응시하도록 안내한다. 문서 열람이 허용된다고 가정하지 않는다.
 
-1. 공식 과제 README, `.hackathon/OPERATING_RULES.md`, 요구사항·결정·검증 기록을 읽는다. 실제 구현 파일과 핵심 데이터 흐름을 확인한다. 없는 DB·API·아키텍처·성능·테스트·결정 이유를 만들지 않는다. 시간과 규정이 우선이다.
+1. 공식 과제 README, `.hackathon/OPERATING_RULES.md`, `.hackathon/INTERVIEW_PROTOCOL.md`, 요구사항·결정·검증 기록을 읽는다. 탐색 표와 실제 고객 확인 답변을 점검하고, 묻지 않은 영역·미확인 규칙·확인했지만 미구현인 요구를 구분한다. 중요한 미확인은 남은 시간에 맞는 질문으로 제안하고 답을 받지 못하면 한계로 남긴다. 실제 구현 파일과 핵심 데이터 흐름을 확인한다. 없는 DB·API·아키텍처·성능·테스트·결정 이유를 만들지 않는다. 시간과 규정이 우선이다.
 2. 필수조건을 대조하고 중요한 결함은 수정·재검증한다. 그 후 문답 작성 중에는 코드를 안정시킨다. 실행 근거가 필요하면 `python3 .hackathon/tools/kit.py check --workspace . --id <id> -- <실제 명령 인자들>`로 기록한다. Browser는 참가자가 직접 확인한다.
 3. `python3 .hackathon/tools/kit.py prepare-qa --workspace .`로 처음 문답 파일을 만들고, 이미 있으면 보존하며 갱신한다. `docs/QA_CONTRACT.md`의 배치본 `.hackathon/QA_CONTRACT.md`를 읽어 `.hackathon/study/qa.json`을 실제 답변으로 채운다.
 4. 핵심 6개 주제는 문제·우선순위, 구조·데이터 흐름, 업무 규칙·데이터 정확성, 검증·오류 복구, 대안·한계·변경 대응, AI 지시·판단이다. 각 주제당 핵심 질문 1개, 필요할 때 추가 질문 최대 6개다. 실제 서술형 문항과 일치한다고 주장하지 않는다.
