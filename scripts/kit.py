@@ -70,7 +70,9 @@ After each customer answer, update the six discovery areas with evidence, unreso
 
 Apply Matt through these project adjustments: business facts come from relayed customer answers, technical facts from local inspection. Reuse agreed public test boundaries and acceptance criteria instead of requesting approval for every test. Review committed, staged, unstaged AND untracked product files; use `review-scope` to enumerate them. The existing requirements ledger supplies the spec. If independent reviewers are unavailable, report a same-session review accurately. Do not require upstream setup, an external tracker or new global settings.
 
-Link check records to R IDs with `check --requirement R-001`; use `--test-runner unittest` or `pytest` for supported test summaries. Run `audit-requirements` before final Q&A; resolve its findings without automatically promoting statuses. At the first working slice, invite the participant to explain the requirement, implementation choice and failure condition in their own words. Do not claim understanding when they have not answered.
+Before implementation read `.hackathon/AUTOMATED_TESTING.md`. Own intermediate verification: use Matt TDD at the agreed public boundaries, write task-specific tests from confirmed acceptance criteria, execute them, read failures, fix and rerun the same procedures. Do not ask the participant to click through every feature. Use isolated test data and test-owned local servers, preserving the running app and participant data. Test real production functions/API/workflows, not a duplicated implementation. Keep customer business-rule and textual workflow questions active; these are not manual UI testing.
+
+Link check records to R IDs with `check --requirement R-001`; supported test summaries are unittest, pytest and node:test (TAP). Group the participant's final UI checklist after automatic regression checks. An Implemented requirement may have automatic PASS with final UI pending; this does not block independent implementation. Keep required UI acceptance criteria pending until actual participant observations. After a UI fix, rerun affected automatic checks and the relevant final UI steps. Run `audit-requirements` before final Q&A. Invite direct explanation when the participant is available; do not stop independent work or claim understanding without an answer.
 
 Use only the provided Codex and allowed models. Do not update Codex, connect external AI/personal keys, use Computer Use/browser automation, push Git, send task data outside, or alter platform/proctor settings. Browser interaction is performed manually by the participant.
 
@@ -216,7 +218,7 @@ def install(root, mode, requirements=None):
 
     for name in [
         "OPERATING_RULES.md", "START_PROMPT.md", "FINISH_PROMPT.md", "QA_CONTRACT.md",
-        "TIMEBOX.md", "SKILLS.md", "INPUT_EXAMPLES.md", "INTERVIEW_PROTOCOL.md", "EVIDENCE_TRACKING.md", "VALIDATION_TOOLS.md",
+        "TIMEBOX.md", "SKILLS.md", "INPUT_EXAMPLES.md", "INTERVIEW_PROTOCOL.md", "EVIDENCE_TRACKING.md", "VALIDATION_TOOLS.md", "AUTOMATED_TESTING.md",
     ]:
         plan(f".hackathon/{name}", (source / "docs" / name).read_bytes())
     plan(requirement_relative, (source / "templates/REQUIREMENTS.md").read_bytes(), preserve=True)
@@ -230,6 +232,12 @@ def install(root, mode, requirements=None):
     ).encode("utf-8"), preserve=True)
     for name in ["issue-tracker.md", "domain.md", "triage-labels.md"]:
         plan(f"docs/agents/{name}", (source / "templates" / name).read_bytes())
+    for stack, files in {
+        "python": ["http_fixture.py.example", "test_feature.py.example"],
+        "node": ["http_fixture.mjs.example", "feature.test.mjs.example"],
+    }.items():
+        for name in files:
+            plan(f".hackathon/testing/{stack}/{name}", (source / "templates/testing" / stack / name).read_bytes())
     plan(".hackathon/tools/kit.py", Path(__file__).read_bytes())
 
     skill_sources = [source / ".agents" / "skills" / "implementation-brief"]
@@ -541,26 +549,50 @@ def test_summary(command, output, runner):
         names = [Path(x).name for x in command]
         modules = {right for left, right in zip(names, names[1:]) if left == "-m"}
         runner = "pytest" if names[0].startswith("pytest") or "pytest" in modules else (
-            "unittest" if "unittest" in modules else "none")
+            "unittest" if "unittest" in modules else
+            "node" if names[0] in {"node", "nodejs", "node.exe"} and "--test" in names else "none")
     text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", output)
     total = skipped = None
+    todo = cancelled = failed = 0
     if runner == "unittest":
         ran = re.findall(r"(?m)^Ran (\d+) tests?\b", text)
         if ran:
             total = int(ran[-1])
             skipped_rows = re.findall(r"(?m)^(?:OK|FAILED)\s*\([^\n]*\bskipped=(\d+)", text)
             skipped = int(skipped_rows[-1]) if skipped_rows else 0
+            problems = re.findall(r"(?m)^FAILED\s*\(([^\n]*)\)", text)
+            if problems:
+                failed = sum(int(n) for n in re.findall(r"(?:failures|errors)=(\d+)", problems[-1]))
     elif runner == "pytest":
         summaries = [line for line in text.splitlines() if re.search(r"\b\d+ (?:passed|failed|skipped|errors?|xfailed|xpassed)\b.*\bin \d", line)]
         if summaries:
             counts = {key: int(n) for n, key in re.findall(r"\b(\d+) (passed|failed|skipped|errors?|xfailed|xpassed)\b", summaries[-1])}
             total, skipped = sum(counts.values()), counts.get("skipped", 0)
+            failed = counts.get("failed", 0) + counts.get("error", 0) + counts.get("errors", 0)
         elif re.search(r"\bno tests ran\b", text):
             total = skipped = 0
+    elif runner == "node":
+        groups, counts = [], {}
+        for key, n in re.findall(r"(?m)^#\s+(tests|pass|fail|cancelled|skipped|todo)\s+(\d+)\s*$", text):
+            if key == "tests" and counts:
+                groups.append(counts)
+                counts = {}
+            counts[key] = int(n)
+        if counts:
+            groups.append(counts)
+        failed = sum(c.get("fail", 0) for c in groups)
+        cancelled = sum(c.get("cancelled", 0) for c in groups)
+        required = {"tests", "pass", "fail", "skipped", "todo"}
+        if groups and all(required <= c.keys() and c["tests"] == sum(c.get(k, 0) for k in
+                ("pass", "fail", "cancelled", "skipped", "todo")) for c in groups):
+            total = sum(c["tests"] for c in groups)
+            skipped = sum(c["skipped"] for c in groups)
+            todo = sum(c["todo"] for c in groups)
+    effective = total - skipped - todo - cancelled if total is not None else None
     state = "NOT_APPLICABLE" if runner == "none" else "UNKNOWN" if total is None else (
-        "NOT_RUN" if total <= skipped else "RAN")
+        "NOT_RUN" if effective <= 0 else "RAN")
     return {"runner": runner, "state": state, "total": total, "skipped": skipped,
-            "effective": total - skipped if total is not None else None}
+            "todo": todo, "cancelled": cancelled, "failed": failed, "effective": effective}
 
 
 def record_check(root, check_id, command, timeout, runner="auto", requirement_ids=(), requirements=None):
@@ -595,7 +627,7 @@ def record_check(root, check_id, command, timeout, runner="auto", requirement_id
         stdout, stderr, exit_code = "", str(exc), 127
     after = fingerprint(root, for_checks=True, requirements=requirements)["digest"]
     summary = test_summary(command, stdout + "\n" + stderr, runner)
-    result = "FAIL" if exit_code and not (exit_code == 5 and summary["runner"] in {"pytest", "unittest"} and summary["state"] == "NOT_RUN") else (
+    result = "FAIL" if summary["failed"] or summary["cancelled"] or exit_code and not (exit_code == 5 and summary["runner"] in {"pytest", "unittest"} and summary["state"] == "NOT_RUN") else (
         "NOT_RUN" if summary["state"] == "NOT_RUN" else
         "UNVERIFIED" if before != after or summary["state"] == "UNKNOWN" else "PASS")
     record = {
@@ -869,7 +901,7 @@ def main(argv=None):
         if action == "check":
             sub.add_argument("--id", required=True)
             sub.add_argument("--timeout", type=int, default=300)
-            sub.add_argument("--test-runner", choices=["auto", "none", "unittest", "pytest"], default="auto")
+            sub.add_argument("--test-runner", choices=["auto", "none", "unittest", "pytest", "node"], default="auto")
             sub.add_argument("command", nargs=argparse.REMAINDER)
     commands.add_parser("verify-vendor")
     args = parser.parse_args(argv)

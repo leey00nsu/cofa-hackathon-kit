@@ -1,0 +1,62 @@
+"""Copy into the project's tests. Import the real application's server factory.
+
+The factory must create a NEW stdlib-compatible HTTPServer using the supplied
+loopback host/port. Use the project's existing test client for other frameworks.
+Never return a participant's existing server or use its data directory.
+"""
+from contextlib import contextmanager
+import http.client
+import json
+from pathlib import Path
+import tempfile
+import threading
+
+
+@contextmanager
+def isolated_directory():
+    with tempfile.TemporaryDirectory(prefix="cofa-test-") as directory:
+        yield Path(directory)
+
+
+class Response:
+    def __init__(self, status, headers, body):
+        self.status, self.headers, self.body = status, headers, body
+
+    def json(self):
+        return json.loads(self.body)
+
+
+class Client:
+    def __init__(self, port):
+        self.port = port
+
+    def request(self, method, path, body=None, headers=None):
+        if not path.startswith("/") or path.startswith("//"):
+            raise ValueError("Use a local request path, not an external URL")
+        headers = dict(headers or {})
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body).encode("utf-8")
+            headers.setdefault("Content-Type", "application/json")
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=3)
+        try:
+            connection.request(method, path, body, headers)
+            response = connection.getresponse()
+            return Response(response.status, dict(response.getheaders()), response.read())
+        finally:
+            connection.close()
+
+
+@contextmanager
+def http_server(factory):
+    server = factory("127.0.0.1", 0)
+    if server.server_address[0] != "127.0.0.1":
+        raise ValueError("Factory must create a new loopback test server")
+    thread = threading.Thread(target=server.serve_forever,
+                              kwargs={"poll_interval": 0.01}, daemon=True)
+    thread.start()
+    try:
+        yield Client(server.server_address[1])
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)

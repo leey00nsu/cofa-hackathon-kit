@@ -30,3 +30,8 @@
 - https://github.com/phy0916/cofa-probe-starter — 장부 필수 필드와 중복 참조 검사.
 - https://github.com/hongkevin/cofathon-prep — 검사 0건과 통과 구분.
 - https://github.com/hamjoon2003/sk-hynix-2nd-harness — unittest 실행 수와 skip 관찰.
+
+자동 검증 운영은 Python unittest와 Node node:test의 표준 runner를 사용한다. HTTP/임시 데이터 참조 코드는 이 저장소에서 작성했으며 다른 프로젝트의 앱 코드를 포함하지 않는다.
+
+- https://docs.python.org/3/library/unittest.html
+- https://nodejs.org/api/test.html

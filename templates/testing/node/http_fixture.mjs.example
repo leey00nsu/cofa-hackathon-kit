@@ -1,0 +1,65 @@
+// Copy into the project's tests and import the REAL application's server factory.
+// The factory returns a NEW, not-yet-listening node:http Server. Express apps can
+// use createServer(app). Never return the participant's running server.
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { request as httpRequest } from 'node:http';
+
+export async function withTempDirectory(run) {
+  const directory = await mkdtemp(join(tmpdir(), 'cofa-test-'));
+  try {
+    return await run(directory);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+function client(port) {
+  return {
+    async request(method, path, body = undefined, headers = {}) {
+      if (!path.startsWith('/') || path.startsWith('//')) {
+        throw new Error('Use a local request path, not an external URL');
+      }
+      headers = { ...headers };
+      if (body !== undefined && !Buffer.isBuffer(body) && typeof body !== 'string') {
+        body = JSON.stringify(body);
+        headers['Content-Type'] ??= 'application/json';
+      }
+      if (body !== undefined) headers['Content-Length'] = Buffer.byteLength(body);
+      return new Promise((resolve, reject) => {
+        const req = httpRequest({ hostname: '127.0.0.1', port, method, path, headers, agent: false }, res => {
+          const chunks = [];
+          res.on('data', chunk => chunks.push(chunk));
+          res.on('error', reject);
+          res.on('end', () => {
+            const raw = Buffer.concat(chunks).toString('utf8');
+            resolve({ status: res.statusCode, headers: res.headers, body: raw, json: () => JSON.parse(raw) });
+          });
+        });
+        req.on('error', reject);
+        req.setTimeout(3000, () => req.destroy(new Error('Test request timeout')));
+        req.end(body);
+      });
+    },
+  };
+}
+
+export async function withHttpServer(factory, run) {
+  const server = await factory();
+  if (server.listening) throw new Error('Factory must create a new unstarted test server');
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+  try {
+    return await run(client(server.address().port));
+  } finally {
+    // Only close the server created by this fixture.
+    server.closeAllConnections?.();
+    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+}

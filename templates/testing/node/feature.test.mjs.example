@@ -1,0 +1,13 @@
+// Unconfigured reference, not evidence of a working feature.
+// Replace with tests of the REAL application and confirmed acceptance criteria.
+// Expected values come from customer Q evidence/official examples, not the code.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+test('confirmed R behavior', { skip: 'Reference: configure actual task test' }, () => {
+  assert.fail('Import the real production interface; assert an independently known result');
+});
+
+test('confirmed boundary or failure', { skip: 'Reference: configure actual task test' }, () => {
+  assert.fail('Test the confirmed boundary, not an invented business rule');
+});

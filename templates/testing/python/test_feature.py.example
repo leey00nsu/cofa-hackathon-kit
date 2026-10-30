@@ -1,0 +1,16 @@
+"""Unconfigured reference: not a task test or evidence of completion.
+
+Replace this with tests of the REAL application after confirming the R ID and
+acceptance criteria. Derive expected results from Q evidence, not the code.
+Use temporary storage and http_fixture for API/restart/workflow tests as needed.
+"""
+import unittest
+
+
+@unittest.skip("Reference only: replace with confirmed task requirements")
+class ConfirmedFeatureTests(unittest.TestCase):
+    def test_confirmed_behavior(self):
+        self.fail("Import the real production interface and assert independently known results")
+
+    def test_confirmed_error_or_boundary(self):
+        self.fail("Assert a confirmed boundary/failure, not an invented business rule")

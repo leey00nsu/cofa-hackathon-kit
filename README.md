@@ -36,6 +36,10 @@ Matt 전체 원본은 `vendor/matt-pocock-skills/`에 고정돼 있습니다. **
 
 기술적 선택은 Codex가 제안하고 참가자가 판단합니다. 업무 사실을 임의로 확정하거나 ‘있으면 편하다’를 곧바로 P0로 올리지 않습니다. 첫 작동 흐름 뒤와 제출 전 범위 확정 때는 담당자에게 전달할 확인 질문을 제안하고 실제 답변을 기록합니다. 질문 횟수를 채우기 위한 반복은 하지 않습니다.
 
+**중간 검증은 Codex가 자동으로, 최종 UI 확인은 참가자가 합니다.** Matt TDD로 실제 함수·API·저장·업무 흐름을 검사하고 실패 수정·재실행까지 수행합니다. 기능마다 참가자의 클릭 테스트를 기다리지 않습니다. 고객에게 업무 규칙/흐름을 묻는 과정은 유지합니다. 기능 동결 뒤 자동 회귀 검사를 마치고 최종 UI 확인 목록을 한 번에 전달합니다.
+
+[자동 테스트 운영](docs/AUTOMATED_TESTING.md)에 Python/Node 참조 틀, 임시 데이터·테스트 소유 서버, 검사 빈도, UI 대기와 구현 진행의 구분을 설명합니다. 설치 시 `.hackathon/testing/`에 `.example` 참조만 배치하고 실제 과제 테스트를 자동 생성했다고 주장하지 않습니다. Codex가 확인된 수락 조건에 맞춰 필요한 참조를 실제 `tests/`로 복사·적용합니다.
+
 [Evidence Tracking](docs/EVIDENCE_TRACKING.md)은 기존 R번호에 고객 Q/공식 조건·수락 조건·결정·실제 파일·검증 결과를 연결합니다. 원문은 로컬 비공개 파일에 두고 장부에는 요약과 참조만 남깁니다. 전체 수락 조건의 실제 검증 근거가 있어야 Verified입니다. Markdown 작성이 공식 점수를 보장하거나 평가기가 문서를 읽는다는 뜻은 아닙니다. 요약·합성 자료도 공개 허용을 별도로 검토합니다.
 
 진행 중인 작업 공간에서는 새 설치기를 무작정 다시 실행하지 마세요. 수정된 지침과 충돌하면 설치는 중단됩니다. 기존 장부·코드를 보존하고 AGENTS와 필요한 문서·ignore 규칙만 선별 반영한 뒤 실행 중인 Codex에 다시 읽게 합니다.
@@ -47,7 +51,7 @@ python3 .hackathon/tools/kit.py check --workspace . --id build --requirement R-0
 python3 .hackathon/tools/kit.py check --workspace . --id tests --requirement R-001 --test-runner unittest -- python3 -m unittest discover -v
 ```
 
-위 명령은 예시입니다. 실제 프로젝트의 명령을 사용하세요. Browser에서의 버튼·화면 확인은 참가자가 직접 수행하고 검증 장부에 별도로 남깁니다. 이 도구는 Computer Use나 브라우저 자동 조작을 실행하지 않습니다.
+위 명령은 예시입니다. 실제 프로젝트의 명령을 사용하세요. Node는 `--test-runner node`와 `node --test --test-reporter=tap`을 사용할 수 있습니다. Browser에서의 버튼·화면 확인은 참가자가 최종 목록으로 직접 수행하고 검증 장부에 별도로 남깁니다. 이 도구는 Computer Use나 브라우저 자동 조작을 실행하지 않습니다.
 
 실제 결과 셀에 `check:tests` 같은 실행 참조를 남깁니다. 소스·수락 조건·참조 고객 답변이 달라지면 과거 실행을 현재 Verified의 근거로 재사용하지 않습니다. 0건·전부 skip은 NOT_RUN으로 구분하고 전체 실행 로그도 보존합니다. 장부 연결 검사와 실제 파일 리뷰는 다음 명령을 사용합니다. 감사 PASS가 모든 요구 충족을 뜻하지는 않습니다.
 
@@ -57,7 +61,7 @@ python3 .hackathon/tools/kit.py review-scope --workspace .
 python3 .hackathon/tools/kit.py preflight --workspace .
 ```
 
-[검증 명령 안내](docs/VALIDATION_TOOLS.md)에 수동 관찰 기록·판정 범위·종료 코드·기존 장부 형식을 설명합니다. 첫 흐름 완성 뒤에는 참가자도 고객 근거·구현 선택·실패 조건을 짧게 설명해 이해를 확인합니다. 답을 받지 못했다면 이해 확인 대기로 남깁니다.
+[검증 명령 안내](docs/VALIDATION_TOOLS.md)에 수동 관찰 기록·판정 범위·종료 코드·기존 장부 형식을 설명합니다. 참가자가 여유 있을 때 고객 근거·구현 선택·실패 조건을 짧게 설명해 이해를 확인합니다. 답을 받지 못했다면 대기로 남기고 독립 구현을 이어갑니다.
 
 ## 구현 완료: 예상 문답과 복습본까지
 
@@ -97,6 +101,7 @@ python3 .hackathon/tools/kit.py verify-qa --workspace .
 - [인터뷰 종료·구현 진입·재질문 절차](docs/INTERVIEW_PROTOCOL.md)
 - [요구사항·구현·실행 근거 연결과 비공개 기록](docs/EVIDENCE_TRACKING.md)
 - [장부 감사·실행 지문·0건 테스트·수동 관찰·리뷰 대상](docs/VALIDATION_TOOLS.md)
+- [중간 자동 검증·격리 테스트 틀·최종 UI 확인](docs/AUTOMATED_TESTING.md)
 - [상태·생성 파일 정의](docs/QA_CONTRACT.md)
 
 준비 도구 자체의 검증:

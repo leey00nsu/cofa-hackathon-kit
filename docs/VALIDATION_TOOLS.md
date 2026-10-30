@@ -31,13 +31,17 @@ python3 .hackathon/tools/kit.py check --workspace . --id tests-01 --requirement 
 | NOT_RUN | 지원 테스트의 0건 또는 전부 skip |
 | UNVERIFIED | 실행 중 소스 변경 또는 지원 runner 요약을 읽을 수 없음 |
 
-unittest/pytest는 직접 명령과 `python -m` 호출에서 자동 인식한다. wrapper가 있으면 `--test-runner`를 명시한다. 일반 CLI는 `none`으로 테스트 수를 추정하지 않는다. pytest 파서의 동작 검증은 자체 요약 fixture를 사용하며 시험 환경의 pytest 실행을 보장하지 않는다. 출력 요약은 실제 테스트의 의미나 전체 수락 조건 충족을 입증하지 않는다.
+unittest/pytest는 직접 명령과 `python -m` 호출에서 자동 인식한다. Node의 `node --test`도 인식하며 `--test-reporter=tap`의 요약을 읽는다. npm 등 wrapper는 `--test-runner node`를 명시하고 내부 runner에서 TAP을 출력한다. skip/todo/cancelled는 유효 실행에서 제외하며 실패/cancelled가 있으면 통과로 보지 않는다. wrapper가 실패를 출력하고 0을 반환해도 해당 기록은 FAIL이다. Node가 빈 파일 로드만 테스트 1건으로 집계할 수 있어 단순 import 성공은 기능 검증으로 삼지 않는다.
 
-원래 명령이 비정상 종료하면 원래 종료 코드를 유지한다. 원래 0이지만 NOT_RUN/UNVERIFIED이면 CLI는 2를 반환한다. Python 버전에 따라 unittest 0건의 원래 종료 코드가 0 또는 5일 수 있으며 그대로 보존한다.
+일반 CLI는 `none`으로 테스트 수를 추정하지 않는다. pytest 파서의 동작 검증은 자체 요약 fixture를 사용하며 시험 환경의 pytest 실행을 보장하지 않는다. 출력 요약은 실제 테스트의 의미나 전체 수락 조건 충족을 입증하지 않는다. 중간 검증 실행과 템플릿 사용은 [AUTOMATED_TESTING.md](AUTOMATED_TESTING.md)를 따른다.
+
+원래 명령이 비정상 종료하면 원래 종료 코드를 유지한다. 원래 0이지만 결과가 NOT_RUN/UNVERIFIED이거나 wrapper가 숨긴 FAIL이면 CLI는 2를 반환한다. Python 버전에 따라 unittest 0건의 원래 종료 코드가 0 또는 5일 수 있으며 그대로 보존한다.
 
 ## 실제 수동 관찰
 
 참가자가 **현재 코드에서 실제 확인한 결과**를 전달한 뒤에만 사용한다. 아래 note를 그대로 실제 결과로 복사하지 않는다.
+
+기본은 자동 회귀 검사 뒤의 최종 UI 목록에서 한 번에 확인받는 것이다. 기능마다 중간 클릭 검증을 요구하지 않는다. UI 확인 대기는 독립 구현을 막지 않으며 필요한 UI 수락 조건을 통과 처리하는 근거도 아니다.
 
 ```sh
 python3 .hackathon/tools/kit.py manual-check --workspace . --id ui-01 --requirement R-001 --result PASS --note '참가자가 실제 확인한 입력·행동·관찰 결과'
