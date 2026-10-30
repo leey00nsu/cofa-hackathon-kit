@@ -1,6 +1,6 @@
 # 요구사항
 
-공식 과제 README의 필수조건을 먼저 기록한다. EVIDENCE_TRACKING.md에 따라 실제 고객 질문·답변 원문은 `.hackathon/private/INTERVIEWS.md`에 Q번호로 보관하고 이 장부에는 요약·참조만 남긴다. 사실·가설·반박을 구분한다.
+공식 과제 README의 필수조건을 먼저 기록한다. 프로젝트 AGENTS의 Evidence 규칙에 따라 실제 고객 질문·답변 원문은 `.hackathon/private/INTERVIEWS.md`에 Q번호로 보관하고 이 장부에는 요약·참조만 남긴다. 사실·가설·반박을 구분한다.
 
 ## 탐색 범위
 

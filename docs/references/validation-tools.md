@@ -6,8 +6,6 @@ Python 3.10+ 표준 라이브러리만 사용한다. 공식 과제 지시가 우
 
 설치기는 기존 `.hackathon/REQUIREMENTS.md`, `docs/REQUIREMENTS.md`, 루트 `REQUIREMENTS.md` 및 소문자 이름을 찾아 하나를 재사용한다. 후보가 여러 개면 파일을 쓰기 전에 중단하므로 `install --requirements <기존경로>`로 정본을 지정한다. 설치 결과와 `.hackathon/install.json`에 실제 경로를 기록하고 AGENTS에 반영한다. 다른 이름의 문서도 명시적으로 지정할 수 있다. 기존 본문·ID·공식 README는 보존한다.
 
-기본 설치는 Matt core 10개와 자체 문답 스킬 1개다. 더 필요하면 새 작업 공간에 `--matt all`로 27개 Matt 스킬을 배치할 수 있다. 수정된 진행 공간에 재설치를 강제하지 않는다.
-
 감사는 템플릿의 Markdown 표를 읽는다. 영문 대응 열은 `Requirement ID, Description, Status, Customer Evidence, Acceptance Criteria, Implementation Files, Verification Procedure, Actual Verification Result, Remaining Issues`다. Design Decision과 우선순위는 기존 표에 유지하되 자동으로 의미를 판단하지 않는다. 셀 안 `|`는 `\|`로 작성한다. 다른 문서 형식은 감사가 읽을 수 없다고 표시하며 별도 장부를 자동 생성하거나 상태를 바꾸지 않는다.
 
 고객 원문 `.hackathon/private/INTERVIEWS.md`에는 실제 답변을 받은 뒤 `## Q1` 제목과 `질문:`, `답변:`으로 한 건씩 적는다. `### Q1 답변` 뒤의 실제 원문도 인식한다. 답변 대기 절·코드 블록의 형식 예시는 답변 근거로 인정하지 않는다. Q1은 번호 형식의 예시이며 실제 대화 없이 생성하지 않는다. 원문 진위 자체를 도구가 증명하지는 못한다.
@@ -33,7 +31,7 @@ python3 .hackathon/tools/kit.py check --workspace . --id tests-01 --requirement 
 
 unittest/pytest는 직접 명령과 `python -m` 호출에서 자동 인식한다. Node의 `node --test`도 인식하며 `--test-reporter=tap`의 요약을 읽는다. npm 등 wrapper는 `--test-runner node`를 명시하고 내부 runner에서 TAP을 출력한다. skip/todo/cancelled는 유효 실행에서 제외하며 실패/cancelled가 있으면 통과로 보지 않는다. wrapper가 실패를 출력하고 0을 반환해도 해당 기록은 FAIL이다. Node가 빈 파일 로드만 테스트 1건으로 집계할 수 있어 단순 import 성공은 기능 검증으로 삼지 않는다.
 
-일반 CLI는 `none`으로 테스트 수를 추정하지 않는다. pytest 파서의 동작 검증은 자체 요약 fixture를 사용하며 시험 환경의 pytest 실행을 보장하지 않는다. 출력 요약은 실제 테스트의 의미나 전체 수락 조건 충족을 입증하지 않는다. 중간 검증 실행과 템플릿 사용은 [AUTOMATED_TESTING.md](AUTOMATED_TESTING.md)를 따른다.
+일반 CLI는 `none`으로 테스트 수를 추정하지 않는다. pytest 파서의 동작 검증은 자체 요약 fixture를 사용하며 시험 환경의 pytest 실행을 보장하지 않는다. 출력 요약은 실제 테스트의 의미나 전체 수락 조건 충족을 입증하지 않는다. 중간 검증 실행과 템플릿 사용은 [자동 검증 안내](../AUTOMATED_TESTING.md)를 따른다.
 
 원래 명령이 비정상 종료하면 원래 종료 코드를 유지한다. 원래 0이지만 결과가 NOT_RUN/UNVERIFIED이거나 wrapper가 숨긴 FAIL이면 CLI는 2를 반환한다. Python 버전에 따라 unittest 0건의 원래 종료 코드가 0 또는 5일 수 있으며 그대로 보존한다.
 

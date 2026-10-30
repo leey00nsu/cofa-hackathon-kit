@@ -43,44 +43,6 @@ PRIVATE_IGNORES = (
     "/.hackathon/private/", "/.hackathon/checks/", "/.hackathon/study/",
     "/private/", "/PRIVATE*",
 )
-EVIDENCE_BLOCK = """## Evidence Tracking
-
-Read `.hackathon/EVIDENCE_TRACKING.md`. Reuse the existing requirements, decisions, and verification ledgers; do not create a parallel PRD/ticket/evidence system. Preserve existing requirement IDs.
-
-After each relayed customer answer, separate confirmed facts from hypotheses, link each R ID to the actual Q/answer or official task, define observable acceptance criteria, and propose questions for important unknowns. Keep raw relayed questions/answers in Git-ignored `.hackathon/private/INTERVIEWS.md`; put only minimal summaries and Q references in the requirements ledger. Never import hidden persona or evaluation files into the learner workspace.
-
-Before implementation, identify the R IDs. Record important choices, reasons and alternatives in the existing decisions ledger and link actual implementation files. Never confirm an unverified customer rule by assumption. For each requirement link a real test/manual procedure, command, expected/observed results, pass/fail and execution record. Never claim an unrun check passed. After fixing a failure rerun its original procedure and retain both results.
-
-Use Proposed / Confirmed / Implemented / Verified / Blocked. Verified requires actual evidence for all acceptance criteria of that requirement; partial test coverage or pending required manual checks means it remains Implemented. Reassess verification after relevant code, criteria or environment changes; preserve earlier results as history.
-
-For grill-with-docs record Q→R/acceptance criteria; for domain-modeling record terms and important D→R decisions; for implement/tdd record R→files/tests/results; for code-review inspect confirmed requirements, gaps, missing verification and inconsistencies. Select only needed skills. Do not modify Matt's original SKILL.md files or require every skill on every change.
-
-At completion report implemented requirements, actually verified requirements, unconfirmed/unimplemented items, and known failure conditions. Keep updates brief and proportional to the change. Markdown records and skill invocation do not guarantee official scores or evaluator access.
-
-Raw conversations, execution logs and study outputs stay local and ignored. Check already tracked files and Git history separately: ignore does not untrack files or erase commits. Summaries, source and synthetic data also need publication review; publish only permitted material with the user's separate approval. Never push without approval; the exam's external-transfer restrictions still apply.
-"""
-AGENT_BLOCK = f"""{BEGIN}
-## Cofa hackathon workflow
-
-Read `.hackathon/OPERATING_RULES.md`, `.hackathon/INTERVIEW_PROTOCOL.md`, and `.hackathon/SKILLS.md` at startup. Consult the relevant skill adjustment when changing stages. The official task README and current exam instructions take priority. Preserve the provided task files. For a personal rehearsal, use its stated rehearsal timing and monitoring conditions.
-
-Use `.hackathon/REQUIREMENTS.md`, `DECISIONS.md`, and `VERIFICATION.md` for evidence-based requirements, important choices, and actual checks. Use the local Markdown tracker in `docs/agents/issue-tracker.md`.
-
-After each customer answer, update the six discovery areas with evidence, unresolved implementation impact, next questions, and the scope ready to build. Do not end discovery after one case or acceptance criterion. Resolve important unknown business rules before implementing dependent behavior; proceed with independent confirmed work. Distinguish a convenience request from a confirmed P0. Propose customer workflow checks after the first working slice and before final scope freeze, recording actual answers rather than treating proposed questions as confirmation.
-
-Apply Matt through these project adjustments: business facts come from relayed customer answers, technical facts from local inspection. Reuse agreed public test boundaries and acceptance criteria instead of requesting approval for every test. Review committed, staged, unstaged AND untracked product files; use `review-scope` to enumerate them. The existing requirements ledger supplies the spec. If independent reviewers are unavailable, report a same-session review accurately. Do not require upstream setup, an external tracker or new global settings.
-
-Before implementation read `.hackathon/AUTOMATED_TESTING.md`. Own intermediate verification: use Matt TDD at the agreed public boundaries, write task-specific tests from confirmed acceptance criteria, execute them, read failures, fix and rerun the same procedures. Do not ask the participant to click through every feature. Use isolated test data and test-owned local servers, preserving the running app and participant data. Test real production functions/API/workflows, not a duplicated implementation. Keep customer business-rule and textual workflow questions active; these are not manual UI testing.
-
-Link check records to R IDs with `check --requirement R-001`; supported test summaries are unittest, pytest and node:test (TAP). Group the participant's final UI checklist after automatic regression checks. An Implemented requirement may have automatic PASS with final UI pending; this does not block independent implementation. Keep required UI acceptance criteria pending until actual participant observations. After a UI fix, rerun affected automatic checks and the relevant final UI steps. Run `audit-requirements` before final Q&A. Invite direct explanation when the participant is available; do not stop independent work or claim understanding without an answer.
-
-Use only the provided Codex and allowed models. Do not update Codex, connect external AI/personal keys, use Computer Use/browser automation, push Git, send task data outside, or alter platform/proctor settings. Browser interaction is performed manually by the participant.
-
-Completion includes `$implementation-brief`: before submission is fixed, create evidence-based `.hackathon/study/IMPLEMENTATION_QA.md` and `LAST_REVIEW.md`, run `python3 .hackathon/tools/kit.py verify-qa --workspace .`, and leave time for the participant to review. Do not fabricate answers, tests, or decision history. Recheck Q&A if source or evidence changes. Stop AI use after submission is fixed; never answer live follow-up exam questions.
-
-{EVIDENCE_BLOCK}
-{END}
-"""
 
 
 class KitError(Exception):
@@ -216,11 +178,10 @@ def install(root, mode, requirements=None):
                 raise KitError(f"기존 파일과 충돌. 아무 파일도 쓰지 않음: {relative}")
         plans[target] = content
 
-    for name in [
-        "OPERATING_RULES.md", "START_PROMPT.md", "FINISH_PROMPT.md", "QA_CONTRACT.md",
-        "TIMEBOX.md", "SKILLS.md", "INPUT_EXAMPLES.md", "INTERVIEW_PROTOCOL.md", "EVIDENCE_TRACKING.md", "VALIDATION_TOOLS.md", "AUTOMATED_TESTING.md",
-    ]:
+    for name in ["START_PROMPT.md", "INTERVIEW_PROTOCOL.md", "AUTOMATED_TESTING.md"]:
         plan(f".hackathon/{name}", (source / "docs" / name).read_bytes())
+    plan(".hackathon/references/validation-tools.md",
+         (source / "docs/references/validation-tools.md").read_bytes())
     plan(requirement_relative, (source / "templates/REQUIREMENTS.md").read_bytes(), preserve=True)
     for name in ["DECISIONS.md", "VERIFICATION.md"]:
         plan(f".hackathon/{name}", (source / "templates" / name).read_bytes(), preserve=True)
@@ -258,7 +219,9 @@ def install(root, mode, requirements=None):
 
     agent_path = inside(root, "AGENTS.md")
     existing = agent_path.read_text(encoding="utf-8") if agent_path.exists() else ""
-    block = AGENT_BLOCK.replace(".hackathon/REQUIREMENTS.md", requirement_relative)
+    instructions = (source / "templates/AGENTS.md").read_text(encoding="utf-8")
+    block = BEGIN + "\n" + instructions.strip() + "\n" + END + "\n"
+    block = block.replace(".hackathon/REQUIREMENTS.md", requirement_relative)
     if requirement_relative != ".hackathon/REQUIREMENTS.md":
         block = block.replace("## Cofa hackathon workflow", "## Cofa hackathon workflow\n\nThe requirements source of truth is `" + requirement_relative + "`; use it wherever kit guides mention `.hackathon/REQUIREMENTS.md`.")
     if BEGIN in existing or END in existing:

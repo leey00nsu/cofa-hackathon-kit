@@ -6,7 +6,7 @@
 - 고정 커밋: `a496f5513d4a4cf889bc48e189e579f4b0bdf6aa`
 - 포함 범위: 원본 `skills/` 전체, README, LICENSE
 - 라이선스: MIT, Copyright (c) 2026 Matt Pocock. `vendor/matt-pocock-skills/LICENSE` 보존.
-- 수정: 동봉한 원본은 변경하지 않음. 대회용 적용 차이는 `docs/SKILLS.md`·운영 지시에만 기록.
+- 수정: 동봉한 원본은 변경하지 않음. 대회용 적용 차이는 `templates/AGENTS.md`의 프로젝트 운영 지시에만 기록.
 - 검증: `vendor/snapshot.json`에 동봉 파일의 SHA-256 목록. `python3 scripts/kit.py verify-vendor`로 확인.
 - 업데이트: 자동 갱신·플러그인 설치를 실행하지 않음. 대회 전 검증한 고정본을 사용.
 

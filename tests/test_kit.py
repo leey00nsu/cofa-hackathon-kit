@@ -4,6 +4,7 @@ import importlib.util
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -83,8 +84,34 @@ class KitTests(unittest.TestCase):
                                  text=True, capture_output=True, check=True).stdout
         self.assertNotIn("INTERVIEWS.md", tracked)
         self.assertIn(".hackathon/REQUIREMENTS.md", tracked)
-        self.assertTrue((self.root / ".hackathon/EVIDENCE_TRACKING.md").is_file())
-        self.assertIn(kit.EVIDENCE_BLOCK, (self.root / "AGENTS.md").read_text())
+
+    def test_installed_guides_and_skill_references_are_self_contained(self):
+        kit.install(self.root, "none")
+        guides = self.root / ".hackathon"
+        self.assertEqual({path.name for path in guides.glob("*.md")}, {
+            "START_PROMPT.md", "INTERVIEW_PROTOCOL.md", "AUTOMATED_TESTING.md",
+            "REQUIREMENTS.md", "DECISIONS.md", "VERIFICATION.md",
+        })
+        skill = self.root / ".agents/skills/implementation-brief"
+        reference = skill / "references/qa-contract.md"
+        self.assertTrue(reference.is_file())
+        self.assertTrue((guides / "references/validation-tools.md").is_file())
+        self.assertFalse((self.root / "maintainers").exists())
+
+        # References must resolve in the installed workspace without the kit checkout.
+        documents = list(guides.rglob("*.md")) + list(skill.rglob("*.md"))
+        linked = set()
+        for document in documents:
+            for target in re.findall(r"\[[^\]]+\]\(([^\s)]+)\)", document.read_text()):
+                if "://" in target or target.startswith("#"):
+                    continue
+                destination = (document.parent / target.split("#")[0]).resolve()
+                with self.subTest(document=document.name, target=target):
+                    self.assertTrue(destination.is_relative_to(self.root))
+                    self.assertTrue(destination.is_file(), target)
+                linked.add(destination)
+        self.assertIn(reference, linked)
+        self.assertIn(guides / "references/validation-tools.md", linked)
 
     def test_install_refuses_already_tracked_private_files_before_any_write(self):
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
