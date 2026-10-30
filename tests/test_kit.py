@@ -60,6 +60,54 @@ class KitTests(unittest.TestCase):
         self.assertEqual(ledger.read_text(), "Customer evidence received during the task.\n")
         self.assertEqual((self.root / "AGENTS.md").read_text().count(kit.BEGIN), 1)
 
+    def test_install_protects_private_records_and_preserves_ignore_and_answers(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        (self.root / ".gitignore").write_text("# Existing rules\ndata/\n!*.md\n")
+        kit.install(self.root, "none")
+        raw = self.root / ".hackathon/private/INTERVIEWS.md"
+        raw.write_text("EXAMPLE-Q1: fictional fixture, not a real customer answer.\n")
+        kit.install(self.root, "none")
+        self.assertIn("EXAMPLE-Q1", raw.read_text())
+        ignore = (self.root / ".gitignore").read_text()
+        self.assertTrue(ignore.startswith("# Existing rules\ndata/\n!*.md\n"))
+        self.assertEqual(ignore.count("# Cofa local private records"), 1)
+        result = subprocess.run(
+            ["git", "-C", str(self.root), "check-ignore", "--stdin"],
+            input=".hackathon/private/INTERVIEWS.md\n.hackathon/checks/test.json\n"
+                  ".hackathon/study/qa.json\nprivate/notes.md\nPRIVATE_CUSTOMER_PERSONA.md\n",
+            text=True, capture_output=True, check=True,
+        )
+        self.assertEqual(len(result.stdout.splitlines()), 5)
+        subprocess.run(["git", "-C", str(self.root), "add", "."], check=True)
+        tracked = subprocess.run(["git", "-C", str(self.root), "ls-files"],
+                                 text=True, capture_output=True, check=True).stdout
+        self.assertNotIn("INTERVIEWS.md", tracked)
+        self.assertIn(".hackathon/REQUIREMENTS.md", tracked)
+        self.assertTrue((self.root / ".hackathon/EVIDENCE_TRACKING.md").is_file())
+        self.assertIn(kit.EVIDENCE_BLOCK, (self.root / "AGENTS.md").read_text())
+
+    def test_install_refuses_already_tracked_private_files_before_any_write(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        raw = self.root / ".hackathon/private/INTERVIEWS.md"
+        raw.parent.mkdir(parents=True)
+        raw.write_text("fictional private fixture\n")
+        subprocess.run(["git", "-C", str(self.root), "add", "."], check=True)
+        with self.assertRaisesRegex(kit.KitError, "이미 추적 중"):
+            kit.install(self.root, "none")
+        self.assertFalse((self.root / "AGENTS.md").exists())
+        self.assertFalse((self.root / ".gitignore").exists())
+        self.assertEqual(raw.read_text(), "fictional private fixture\n")
+
+    def test_ignore_symlink_collision_prevents_all_writes(self):
+        outside = self.root / "existing-ignore"
+        outside.write_text("original\n")
+        (self.root / ".gitignore").symlink_to(outside)
+        with self.assertRaises(kit.KitError):
+            kit.install(self.root, "none")
+        self.assertFalse((self.root / "AGENTS.md").exists())
+        self.assertFalse((self.root / ".hackathon").exists())
+        self.assertEqual(outside.read_text(), "original\n")
+
     def test_install_rejects_kit_checkout_as_the_task_root(self):
         with self.assertRaisesRegex(kit.KitError, "작업 공간 루트"):
             kit.install(KIT_PATH.parents[1], "none")

@@ -4,6 +4,8 @@
 
 인터뷰 종료와 구현 전환은 [INTERVIEW_PROTOCOL.md](INTERVIEW_PROTOCOL.md)를 따른다. 스킬을 호출했다는 사실만으로 여섯 영역이 확인되거나 고객 검토를 받은 것으로 보지 않는다.
 
+[EVIDENCE_TRACKING.md](EVIDENCE_TRACKING.md)의 프로젝트 AGENTS 규칙으로 Q→R→D/구현 파일→실제 검증을 연결한다. Matt 원본 SKILL.md는 수정하지 않는다. 모든 스킬을 매번 실행하지 않으며 실제 요구·변경 규모에 맞춰 선택한다.
+
 | 상황 | 사용 |
 | --- | --- |
 | 고객 인터뷰 | `$grill-with-docs`의 질문 구조와 domain-modeling. 사실 확인은 열린 질문 1~3개씩 |

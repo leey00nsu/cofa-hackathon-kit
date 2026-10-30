@@ -34,6 +34,27 @@ IGNORED_DIRS = {
 }
 BEGIN = "<!-- cofa-hackathon-kit:begin -->"
 END = "<!-- cofa-hackathon-kit:end -->"
+PRIVATE_PATHS = (".hackathon/private", ".hackathon/checks", ".hackathon/study", "private")
+PRIVATE_IGNORES = (
+    "/.hackathon/private/", "/.hackathon/checks/", "/.hackathon/study/",
+    "/private/", "/PRIVATE*",
+)
+EVIDENCE_BLOCK = """## Evidence Tracking
+
+Read `.hackathon/EVIDENCE_TRACKING.md`. Reuse the existing requirements, decisions, and verification ledgers; do not create a parallel PRD/ticket/evidence system. Preserve existing requirement IDs.
+
+After each relayed customer answer, separate confirmed facts from hypotheses, link each R ID to the actual Q/answer or official task, define observable acceptance criteria, and propose questions for important unknowns. Keep raw relayed questions/answers in Git-ignored `.hackathon/private/INTERVIEWS.md`; put only minimal summaries and Q references in the requirements ledger. Never import hidden persona or evaluation files into the learner workspace.
+
+Before implementation, identify the R IDs. Record important choices, reasons and alternatives in the existing decisions ledger and link actual implementation files. Never confirm an unverified customer rule by assumption. For each requirement link a real test/manual procedure, command, expected/observed results, pass/fail and execution record. Never claim an unrun check passed. After fixing a failure rerun its original procedure and retain both results.
+
+Use Proposed / Confirmed / Implemented / Verified / Blocked. Verified requires actual evidence for all acceptance criteria of that requirement; partial test coverage or pending required manual checks means it remains Implemented. Reassess verification after relevant code, criteria or environment changes; preserve earlier results as history.
+
+For grill-with-docs record Q→R/acceptance criteria; for domain-modeling record terms and important D→R decisions; for implement/tdd record R→files/tests/results; for code-review inspect confirmed requirements, gaps, missing verification and inconsistencies. Select only needed skills. Do not modify Matt's original SKILL.md files or require every skill on every change.
+
+At completion report implemented requirements, actually verified requirements, unconfirmed/unimplemented items, and known failure conditions. Keep updates brief and proportional to the change. Markdown records and skill invocation do not guarantee official scores or evaluator access.
+
+Raw conversations, execution logs and study outputs stay local and ignored. Check already tracked files and Git history separately: ignore does not untrack files or erase commits. Summaries, source and synthetic data also need publication review; publish only permitted material with the user's separate approval. Never push without approval; the exam's external-transfer restrictions still apply.
+"""
 AGENT_BLOCK = f"""{BEGIN}
 ## Cofa hackathon workflow
 
@@ -46,6 +67,8 @@ After each customer answer, update the six discovery areas with evidence, unreso
 Use only the provided Codex and allowed models. Do not update Codex, connect external AI/personal keys, use Computer Use/browser automation, push Git, send task data outside, or alter platform/proctor settings. Browser interaction is performed manually by the participant.
 
 Completion includes `$implementation-brief`: before submission is fixed, create evidence-based `.hackathon/study/IMPLEMENTATION_QA.md` and `LAST_REVIEW.md`, run `python3 .hackathon/tools/kit.py verify-qa --workspace .`, and leave time for the participant to review. Do not fabricate answers, tests, or decision history. Recheck Q&A if source or evidence changes. Stop AI use after submission is fixed; never answer live follow-up exam questions.
+
+{EVIDENCE_BLOCK}
 {END}
 """
 
@@ -135,6 +158,19 @@ def install(root, mode):
     plans = {}
     preserved = []
 
+    # Ignore cannot protect an already tracked private file. Never silently untrack it.
+    if (root / ".git").exists():
+        result = subprocess.run(["git", "-C", str(root), "ls-files", "-z"],
+                                capture_output=True, text=True, timeout=10, check=False)
+        if result.returncode != 0:
+            raise KitError("Git 추적 파일 확인 실패. 아무 파일도 쓰지 않음")
+        tracked_private = [name for name in result.stdout.split("\0") if name and (
+            any(name == p or name.startswith(p + "/") for p in PRIVATE_PATHS)
+            or name.startswith("PRIVATE"))]
+        if tracked_private:
+            raise KitError("이미 추적 중인 비공개 경로. ignore로 보호되지 않음. 내용을 보존하고 중단함: "
+                           + ", ".join(tracked_private))
+
     def plan(relative, content, preserve=False):
         target = inside(root, relative)
         if target.exists():
@@ -149,11 +185,17 @@ def install(root, mode):
 
     for name in [
         "OPERATING_RULES.md", "START_PROMPT.md", "FINISH_PROMPT.md", "QA_CONTRACT.md",
-        "TIMEBOX.md", "SKILLS.md", "INPUT_EXAMPLES.md", "INTERVIEW_PROTOCOL.md",
+        "TIMEBOX.md", "SKILLS.md", "INPUT_EXAMPLES.md", "INTERVIEW_PROTOCOL.md", "EVIDENCE_TRACKING.md",
     ]:
         plan(f".hackathon/{name}", (source / "docs" / name).read_bytes())
     for name in ["REQUIREMENTS.md", "DECISIONS.md", "VERIFICATION.md"]:
         plan(f".hackathon/{name}", (source / "templates" / name).read_bytes(), preserve=True)
+    plan(".hackathon/private/INTERVIEWS.md", (
+        "# 전달받은 고객 질문·답변 — 로컬 비공개\n\n"
+        "아직 대화 기록 없음. 실제 전달받은 질문·답변만 Q번호로 남긴다. "
+        "질문 원문이 없으면 미보존이라고 표시한다. "
+        "비공개 페르소나·평가표·인증정보를 가져오지 않는다.\n"
+    ).encode("utf-8"), preserve=True)
     for name in ["issue-tracker.md", "domain.md", "triage-labels.md"]:
         plan(f"docs/agents/{name}", (source / "templates" / name).read_bytes())
     plan(".hackathon/tools/kit.py", Path(__file__).read_bytes())
@@ -183,6 +225,14 @@ def install(root, mode):
     else:
         agent_content = existing + ("\n\n" if existing else "") + AGENT_BLOCK
     plans[agent_path] = agent_content.encode("utf-8")
+
+    ignore_path = inside(root, ".gitignore")
+    ignore_text = ignore_path.read_text(encoding="utf-8") if ignore_path.exists() else ""
+    # Append after existing negations so the local-private rules take precedence.
+    ignore_block = "# Cofa local private records\n" + "\n".join(PRIVATE_IGNORES) + "\n"
+    if not ignore_text.endswith(ignore_block):
+        ignore_text += ("\n" if ignore_text and not ignore_text.endswith("\n") else "") + ignore_block
+    plans[ignore_path] = ignore_text.encode("utf-8")
 
     installed_path = inside(root, ".hackathon/install.json")
     previous = load_json(installed_path) if installed_path.exists() else None

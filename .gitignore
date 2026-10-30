@@ -10,3 +10,5 @@ node_modules/
 .scratch/
 work/
 *.log
+/private/
+/PRIVATE*

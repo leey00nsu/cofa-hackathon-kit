@@ -7,3 +7,5 @@
 준비 도구를 바꾸면 `python3 -m unittest discover -s tests -v`와 `python3 scripts/kit.py verify-vendor`로 확인한다. 브라우저 자동 조작은 사용하지 않는다.
 
 당일 작업 공간에 적용할 지시는 `scripts/kit.py install`이 별도로 추가한다. 공식 과제 README는 보존한다.
+
+Evidence Tracking은 `docs/EVIDENCE_TRACKING.md`를 따른다. 준비 키트에는 일반 규칙·빈 양식·명시적인 가상 예시만 넣는다. 실제 고객 답변·프로젝트 요구·실행 로그는 이 저장소에 복사하지 않는다. Matt 원본 SKILL.md는 수정하지 않고 설치되는 프로젝트 AGENTS 규칙으로 R→Q/D→구현 파일→V/실행 결과를 연결한다. 문서 작성을 공식 점수의 근거로 주장하지 않는다. 공개 생성·Push에는 사용자의 별도 승인이 필요하다.

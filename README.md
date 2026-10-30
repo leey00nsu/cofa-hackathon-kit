@@ -22,6 +22,7 @@ Codex 대화 입력창에 `$grill-with-docs .hackathon/START_PROMPT.md를 읽고
 
 - 기존 `AGENTS.md`에 짧은 운영 지시를 추가합니다. 기존 내용은 보존합니다.
 - `.hackathon/`에 요구사항·결정·검증 장부와 시작/마무리 지시를 배치합니다.
+- 질문·답변 원문용 `.hackathon/private/INTERVIEWS.md`를 준비하고 원문·실행 로그·복습본의 Git 제외 규칙을 추가합니다. 이미 추적된 비공개 경로는 설치 전에 알리고 중단합니다.
 - `.agents/skills/`에 Matt Pocock의 engineering/productivity 스킬과 `implementation-brief`를 배치합니다.
 - `docs/agents/`에 로컬 Markdown 트래커와 용어 문서 위치를 설정합니다. 기존 파일과 충돌하면 **어떤 파일도 쓰기 전에 중단**합니다.
 
@@ -32,6 +33,10 @@ Matt 전체 원본은 `vendor/matt-pocock-skills/`에 고정돼 있습니다. �
 고객에게 전달할 질문 1~3개 → 답변 근거와 탐색 표 갱신 → 중요한 미확인 재질문 → 확인된 작은 흐름 구현·검증 → 고객 피드백 순서로 진행합니다. [인터뷰 절차](docs/INTERVIEW_PROTOCOL.md)는 업무 흐름·입출력·판단 기준·사람의 권한·예외와 기록 보존·우선순위와 성공의 여섯 영역을 점검합니다. 첫 사례나 수락 기준 하나만으로 인터뷰를 끝내지 않습니다.
 
 기술적 선택은 Codex가 제안하고 참가자가 판단합니다. 업무 사실을 임의로 확정하거나 ‘있으면 편하다’를 곧바로 P0로 올리지 않습니다. 첫 작동 흐름 뒤와 제출 전 범위 확정 때는 담당자에게 전달할 확인 질문을 제안하고 실제 답변을 기록합니다. 질문 횟수를 채우기 위한 반복은 하지 않습니다.
+
+[Evidence Tracking](docs/EVIDENCE_TRACKING.md)은 기존 R번호에 고객 Q/공식 조건·수락 조건·결정·실제 파일·검증 결과를 연결합니다. 원문은 로컬 비공개 파일에 두고 장부에는 요약과 참조만 남깁니다. 전체 수락 조건의 실제 검증 근거가 있어야 Verified입니다. Markdown 작성이 공식 점수를 보장하거나 평가기가 문서를 읽는다는 뜻은 아닙니다. 요약·합성 자료도 공개 허용을 별도로 검토합니다.
+
+진행 중인 작업 공간에서는 새 설치기를 무작정 다시 실행하지 마세요. 수정된 지침과 충돌하면 설치는 중단됩니다. 기존 장부·코드를 보존하고 AGENTS와 필요한 문서·ignore 규칙만 선별 반영한 뒤 실행 중인 Codex에 다시 읽게 합니다.
 
 실행한 테스트를 기록하려면 다음처럼 명령을 전달합니다. 명령은 셸이 아닌 인자 목록으로 실행되며, 종료 코드와 출력이 작업 공간 안에 저장됩니다.
 
@@ -78,6 +83,7 @@ python3 .hackathon/tools/kit.py verify-qa --workspace .
 - [스킬 사용법](docs/SKILLS.md)
 - [상황별 Codex 입력 예시](docs/INPUT_EXAMPLES.md)
 - [인터뷰 종료·구현 진입·재질문 절차](docs/INTERVIEW_PROTOCOL.md)
+- [요구사항·구현·실행 근거 연결과 비공개 기록](docs/EVIDENCE_TRACKING.md)
 - [상태·생성 파일 정의](docs/QA_CONTRACT.md)
 
 준비 도구 자체의 검증:
