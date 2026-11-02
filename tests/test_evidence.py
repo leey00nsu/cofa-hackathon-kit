@@ -49,6 +49,19 @@ class EvidenceTests(unittest.TestCase):
                                 [sys.executable, "-m", "unittest", "-v", "test_total"],
                                 10, requirement_ids=["R-001"])
 
+    def example_qa(self, check_id):
+        kit.prepare_qa(self.root)
+        path = self.root / ".hackathon/study/qa.json"
+        data = json.loads(path.read_text())
+        data["reviewed_at"] = kit.utc_now()
+        for question in data["questions"]:
+            question.update(question="가상 합계의 동작은?", short_answer="두 수의 합을 돌려줍니다.",
+                            answer="가상 합계 함수와 실제 실행 기록을 참조합니다.",
+                            evidence=[{"path": "src/total.py", "line": 2, "quote": "return a + b"}],
+                            check_ids=[check_id], limitations=["형식 검사용 fixture이며 고객 과제가 아닙니다."])
+        path.write_bytes(kit.json_bytes(data))
+        return path
+
     def test_actual_customer_to_requirement_to_execution_and_read_only_audit(self):
         self.fixture()
         record = self.run_example()
@@ -70,6 +83,100 @@ class EvidenceTests(unittest.TestCase):
         result = kit.audit_requirements(self.root)
         self.assertEqual(result["status"], "FAIL")
         self.assertTrue(any("소스" in s for s in result["errors"]))
+
+    def test_missing_full_log_prevents_verified_audit(self):
+        self.fixture()
+        record = self.run_example()
+        self.write_requirement("Verified", actual="check:sum-01")
+        self.assertEqual(kit.audit_requirements(self.root)["status"], "PASS")
+        (self.root / record["log"]).unlink()
+        result = kit.audit_requirements(self.root)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertTrue(any("로그" in error for error in result["errors"]))
+
+    def test_modified_log_is_rejected_without_rewriting_ledger_or_execution(self):
+        self.fixture()
+        record = self.run_example()
+        self.write_requirement("Verified", actual="check:sum-01")
+        ledger = self.root / ".hackathon/REQUIREMENTS.md"
+        execution = self.root / ".hackathon/checks/sum-01.json"
+        before = (ledger.read_bytes(), execution.read_bytes())
+        log = self.root / record["log"]
+        log.write_bytes(log.read_bytes() + b"\nAltered fixture log\n")
+        result = kit.audit_requirements(self.root)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertTrue(any("로그 내용" in error for error in result["errors"]))
+        self.assertEqual((ledger.read_bytes(), execution.read_bytes()), before)
+
+    def test_log_evidence_rejects_bad_digest_path_symlink_and_directory(self):
+        self.fixture()
+        for index, condition in enumerate(["digest", "path", "symlink", "directory"]):
+            with self.subTest(condition=condition):
+                identifier = f"bad-log-{index}"
+                record = self.run_example(identifier)
+                self.write_requirement("Verified", actual="check:" + identifier)
+                target = self.root / record["log"]
+                if condition == "digest":
+                    record["log_sha256"] = None
+                elif condition == "path":
+                    record["log"] = "../outside.log"
+                else:
+                    saved = target.with_suffix(".saved")
+                    target.rename(saved)
+                    if condition == "symlink":
+                        target.symlink_to(saved)
+                    else:
+                        target.mkdir()
+                (self.root / f".hackathon/checks/{identifier}.json").write_bytes(kit.json_bytes(record))
+                result = kit.audit_requirements(self.root)
+                self.assertEqual(result["status"], "FAIL")
+                self.assertTrue(any("로그" in error for error in result["errors"]))
+
+    def test_legacy_log_is_unverified_and_cli_preserves_the_original_record(self):
+        self.fixture()
+        record = self.run_example()
+        record["schema_version"] = 2
+        record.pop("log_sha256")
+        target = self.root / ".hackathon/checks/sum-01.json"
+        target.write_bytes(kit.json_bytes(record))
+        self.write_requirement("Verified", actual="check:sum-01")
+        before = target.read_bytes()
+        result = subprocess.run([sys.executable, str(SOURCE), "audit-requirements", "--workspace", str(self.root)],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        audit = json.loads(result.stdout)
+        self.assertEqual(audit["status"], "UNVERIFIED")
+        self.assertEqual(audit["unverified_log_ids"], ["sum-01"])
+        self.assertEqual(audit["errors"], [])
+        self.assertEqual(target.read_bytes(), before)
+
+    def test_refreshing_qa_fingerprint_cannot_legitimize_a_missing_log(self):
+        self.fixture()
+        record = self.run_example()
+        path = self.example_qa("sum-01")
+        kit.render_qa(self.root)
+        (self.root / record["log"]).unlink()
+        # A caller has refreshed the metadata: the independent log guard must still reject it.
+        data = kit.load_json(path)
+        data["source_fingerprint"] = kit.fingerprint(self.root)["digest"]
+        path.write_bytes(kit.json_bytes(data))
+        with self.assertRaisesRegex(kit.KitError, "로그"):
+            kit.render_qa(self.root)
+
+    def test_qa_marks_historical_logs_without_inventing_integrity_evidence(self):
+        self.fixture()
+        record = self.run_example()
+        record["schema_version"] = 2
+        record.pop("log_sha256")
+        target = self.root / ".hackathon/checks/sum-01.json"
+        target.write_bytes(kit.json_bytes(record))
+        self.example_qa("sum-01")
+        before = target.read_bytes()
+        self.assertEqual(kit.render_qa(self.root)["unverified_log_ids"], ["sum-01"])
+        self.assertEqual(kit.render_qa(self.root, verify_only=True)["unverified_log_ids"], ["sum-01"])
+        rendered = (self.root / ".hackathon/study/IMPLEMENTATION_QA.md").read_text()
+        self.assertIn("이전 기록: 원본 로그 내용 지문 미적용", rendered)
+        self.assertEqual(target.read_bytes(), before)
 
     def test_verified_flow_stays_valid_after_defense_update_but_not_code_change(self):
         # A real command in a fictional workspace exercises the post-feature loop.
@@ -222,6 +329,45 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual((summary["total"], summary["effective"]), (3, 2))
         self.assertEqual(kit.test_summary(["pytest"], "1 skipped in 0.01s", "auto")["state"], "NOT_RUN")
         self.assertEqual(kit.test_summary(["pytest"], "silenced summary", "auto")["state"], "UNKNOWN")
+
+    def test_pytest_wrapper_keeps_failure_before_later_success(self):
+        # Captured runner summaries reproduce a wrapper that loses its child exit code.
+        record = kit.record_check(self.root, "pytest-wrapper", [sys.executable, "-c",
+            "print('1 failed in 0.01s'); print('1 passed in 0.01s')"], 10, runner="pytest")
+        self.assertEqual(record["exit_code"], 0)
+        self.assertEqual(record["result"], "FAIL")
+
+    def test_pytest_mixed_summaries_keep_failures_across_streams_and_order(self):
+        programs = [
+            "print('1 passed in 0.01s'); print('1 failed in 0.01s')",
+            "import sys; print('1 failed in 0.01s'); print('1 passed in 0.01s', file=sys.stderr)",
+            "import sys; print('1 passed in 0.01s'); print('1 error in 0.01s', file=sys.stderr)",
+        ]
+        for index, program in enumerate(programs):
+            with self.subTest(index=index):
+                record = kit.record_check(self.root, f"mixed-{index}",
+                    [sys.executable, "-c", program], 10, runner="pytest")
+                self.assertEqual(record["exit_code"], 0)
+                self.assertEqual(record["result"], "FAIL")
+                self.assertTrue(record["tests"]["ambiguous"])
+
+    def test_pytest_multiple_runs_without_failure_are_not_a_verified_total(self):
+        for index, first in enumerate(["1 passed in 0.01s", "no tests ran in 0.01s"]):
+            with self.subTest(first=first):
+                record = kit.record_check(self.root, f"ambiguous-{index}",
+                    [sys.executable, "-c", f"print({first!r}); print('1 passed in 0.01s')"],
+                    10, runner="pytest")
+                self.assertEqual(record["result"], "UNVERIFIED")
+                self.assertIsNone(record["tests"]["total"])
+
+    def test_pytest_ambiguous_cli_returns_nonzero_and_keeps_original_exit(self):
+        result = subprocess.run([sys.executable, str(SOURCE), "check", "--workspace", str(self.root),
+            "--id", "ambiguous-cli", "--test-runner", "pytest", "--", sys.executable, "-c",
+            "print('1 passed in 0.01s'); print('1 passed in 0.01s')"],
+            capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        record = json.loads(result.stdout)
+        self.assertEqual((record["exit_code"], record["result"]), (0, "UNVERIFIED"))
 
     def test_large_output_keeps_full_log_and_original_failure(self):
         record = kit.record_check(self.root, "large", [sys.executable, "-c", "print('begin-' + 'x'*40000); raise SystemExit(7)"], 10)

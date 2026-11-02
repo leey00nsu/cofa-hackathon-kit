@@ -57,6 +57,14 @@ def digest_bytes(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def digest_file(path):
+    hasher = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
 def json_bytes(value):
     return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
@@ -441,9 +449,34 @@ def file_references(value):
     return result
 
 
+def execution_log_integrity(root, record):
+    """Check preservation, not authenticity, of one command's original full log."""
+    schema = record.get("schema_version")
+    modern = type(schema) is int and schema >= 3
+    relative = record.get("log")
+    if not relative:
+        return {"status": "FAIL" if modern else "UNVERIFIED", "reason": "원본 로그 경로 미기록"}
+    if relative != f".hackathon/checks/{record.get('id')}.log":
+        return {"status": "FAIL", "reason": "실행 ID의 원본 로그 경로와 다름"}
+    try:
+        path = inside(root, relative)
+        if not path.is_file():
+            return {"status": "FAIL", "reason": "원본 로그 파일 없음"}
+        expected = record.get("log_sha256")
+        if expected is None and not modern:
+            return {"status": "UNVERIFIED", "reason": "이전 기록: 원본 로그 내용 지문 미적용"}
+        if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
+            return {"status": "FAIL", "reason": "원본 로그 내용 지문이 없거나 잘못됨"}
+        if digest_file(path) != expected:
+            return {"status": "FAIL", "reason": "원본 로그 내용이 기록 당시와 다름"}
+    except (KitError, OSError) as exc:
+        return {"status": "FAIL", "reason": "원본 로그 확인 실패: " + str(exc)}
+    return {"status": "PASS", "reason": "원본 로그 존재·내용 지문 일치"}
+
+
 def audit_requirements(root, explicit=None):
     path, rows, errors = requirement_rows(root, explicit)
-    warnings, seen = [], set()
+    warnings, seen, unverified_logs = [], set(), set()
     answers = customer_answers(root)
     current = fingerprint(root, for_checks=True, requirements=explicit)["digest"]
     for row in rows:
@@ -500,15 +533,22 @@ def audit_requirements(root, explicit=None):
                     issue("수동 관찰 기록이 아님: " + check_id)
                 if kind == "check" and (record.get("kind") != "executed-command" or record.get("exit_code") != 0):
                     issue("명령 실행 근거가 아님: " + check_id)
+                if record.get("kind") == "executed-command":
+                    integrity = execution_log_integrity(root, record)
+                    if integrity["status"] == "FAIL":
+                        issue(integrity["reason"] + ": " + check_id)
+                    elif integrity["status"] == "UNVERIFIED":
+                        unverified_logs.add(check_id)
+                        warnings.append(rid + ": " + integrity["reason"] + ": " + check_id)
                 if not record.get("stable_source") or record.get("source_after") != current:
                     issue("실행 당시 소스와 다름. 재검증 필요: " + check_id)
                 bindings = record.get("requirements", {})
                 if not isinstance(bindings, dict) or bindings.get(rid) != binding_digest(row, answers):
                     issue("해당 요구·수락 조건·고객 근거와 연결되지 않음: " + check_id)
-    return {"status": "FAIL" if errors else "NOT_RUN" if not rows else "PASS",
+    return {"status": "FAIL" if errors else "NOT_RUN" if not rows else "UNVERIFIED" if unverified_logs else "PASS",
             "requirements_path": path.relative_to(root).as_posix(), "requirements": len(rows),
             "not_marked_verified": [r["id"] for r in rows if r["status"].lower() != "verified"],
-            "errors": errors, "warnings": warnings,
+            "errors": errors, "warnings": warnings, "unverified_log_ids": sorted(unverified_logs),
             "scope": "Reference structure and recorded freshness only; no semantic coverage, customer authenticity or understanding guarantee."}
 
 
@@ -522,6 +562,7 @@ def test_summary(command, output, runner):
     text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", output)
     total = skipped = None
     todo = cancelled = failed = 0
+    ambiguous = False
     if runner == "unittest":
         ran = re.findall(r"(?m)^Ran (\d+) tests?\b", text)
         if ran:
@@ -532,13 +573,19 @@ def test_summary(command, output, runner):
             if problems:
                 failed = sum(int(n) for n in re.findall(r"(?:failures|errors)=(\d+)", problems[-1]))
     elif runner == "pytest":
-        summaries = [line for line in text.splitlines() if re.search(r"\b\d+ (?:passed|failed|skipped|errors?|xfailed|xpassed)\b.*\bin \d", line)]
-        if summaries:
-            counts = {key: int(n) for n, key in re.findall(r"\b(\d+) (passed|failed|skipped|errors?|xfailed|xpassed)\b", summaries[-1])}
-            total, skipped = sum(counts.values()), counts.get("skipped", 0)
-            failed = counts.get("failed", 0) + counts.get("error", 0) + counts.get("errors", 0)
-        elif re.search(r"\bno tests ran\b", text):
-            total = skipped = 0
+        groups = []
+        for line in text.splitlines():
+            if re.search(r"\b\d+ (?:passed|failed|skipped|errors?|xfailed|xpassed)\b.*\bin \d", line):
+                groups.append({key: int(n) for n, key in re.findall(
+                    r"\b(\d+) (passed|failed|skipped|errors?|xfailed|xpassed)\b", line)})
+            elif re.search(r"\bno tests ran\b", line):
+                groups.append({})
+        # A wrapper may print several runs or repeat a summary. Keep every failure,
+        # but do not invent a combined test count or choose the last successful run.
+        failed = sum(g.get("failed", 0) + g.get("error", 0) + g.get("errors", 0) for g in groups)
+        ambiguous = len(groups) > 1
+        if len(groups) == 1:
+            total, skipped = sum(groups[0].values()), groups[0].get("skipped", 0)
     elif runner == "node":
         groups, counts = [], {}
         for key, n in re.findall(r"(?m)^#\s+(tests|pass|fail|cancelled|skipped|todo)\s+(\d+)\s*$", text):
@@ -560,7 +607,8 @@ def test_summary(command, output, runner):
     state = "NOT_APPLICABLE" if runner == "none" else "UNKNOWN" if total is None else (
         "NOT_RUN" if effective <= 0 else "RAN")
     return {"runner": runner, "state": state, "total": total, "skipped": skipped,
-            "todo": todo, "cancelled": cancelled, "failed": failed, "effective": effective}
+            "todo": todo, "cancelled": cancelled, "failed": failed, "effective": effective,
+            "ambiguous": ambiguous}
 
 
 def record_check(root, check_id, command, timeout, runner="auto", requirement_ids=(), requirements=None):
@@ -599,7 +647,7 @@ def record_check(root, check_id, command, timeout, runner="auto", requirement_id
         "NOT_RUN" if summary["state"] == "NOT_RUN" else
         "UNVERIFIED" if before != after or summary["state"] == "UNKNOWN" else "PASS")
     record = {
-        "schema_version": 2, "kind": "executed-command", "result": result,
+        "schema_version": 3, "kind": "executed-command", "result": result,
         "id": check_id, "command": command, "cwd": ".", "started_at": started,
         "finished_at": utc_now(), "exit_code": exit_code, "timed_out": timed_out,
         "stdout": stdout[-32000:], "stderr": stderr[-32000:],
@@ -614,6 +662,7 @@ def record_check(root, check_id, command, timeout, runner="auto", requirement_id
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("x", encoding="utf-8") as log:
         log.write("STDOUT\n" + stdout + "\nSTDERR\n" + stderr)
+    record["log_sha256"] = digest_file(log_path)
     write_json(output, record)
     return record
 
@@ -796,6 +845,10 @@ def validate_qa(root):
                 nonempty(record.get("recorded_at"), f"{identifier}.manual.recorded_at")
             elif type(record.get("exit_code")) is not int or not record.get("finished_at"):
                 raise KitError(f"{identifier}: 잘못된 명령 실행 기록")
+            else:
+                integrity = execution_log_integrity(root, record)
+                if integrity["status"] == "FAIL":
+                    raise KitError(f"{identifier}: {integrity['reason']}: {check_id}")
         limits = question.get("limitations")
         if not isinstance(limits, list) or not limits:
             raise KitError(f"{identifier}: 한계 또는 미검증 범위를 명시할 것")
@@ -826,6 +879,8 @@ def render_content(root, data):
                 full.append(f"- 참가자 수동 진술 `{check_id}`: {record['result']}, {record['recorded_at']} · {record['note']}\n")
             else:
                 full.append(f"- 실행 `{check_id}`: {record.get('result', 'legacy/unassessed')}, exit={record['exit_code']}, {record['finished_at']}\n")
+                integrity = execution_log_integrity(root, record)
+                full.append(f"- 로그 보관 확인 `{check_id}`: {integrity['status']} · {integrity['reason']}\n")
         full.append("\n한계: " + " / ".join(question["limitations"]) + "\n")
         if question["priority"] == "core":
             short.extend([heading, question["short_answer"] + "\n"])
@@ -842,8 +897,15 @@ def render_qa(root, verify_only=False):
                 raise KitError(f"렌더 결과가 없거나 JSON과 다름: {name}. render-qa 필요")
         else:
             target.write_text(content, encoding="utf-8")
+    unverified = set()
+    for question in data["questions"]:
+        for check_id in question.get("check_ids", []):
+            record = load_json(inside(root, f".hackathon/checks/{check_id}.json"))
+            if record.get("kind") != "participant-attestation" and execution_log_integrity(root, record)["status"] == "UNVERIFIED":
+                unverified.add(check_id)
     return {"status": "verified" if verify_only else "rendered", "questions": len(data["questions"]),
-            "scope": "file fingerprint, references, check records, and rendered document consistency only"}
+            "unverified_log_ids": sorted(unverified),
+            "scope": "file fingerprint, references, log preservation, check records, and rendered document consistency only"}
 
 
 def main(argv=None):
@@ -901,7 +963,7 @@ def main(argv=None):
             elif args.action == "audit-requirements":
                 result = audit_requirements(root, args.requirements)
                 print(json.dumps(result, ensure_ascii=False, indent=2))
-                return {"PASS": 0, "FAIL": 1, "NOT_RUN": 2}[result["status"]]
+                return {"PASS": 0, "FAIL": 1, "NOT_RUN": 2, "UNVERIFIED": 2}[result["status"]]
             elif args.action == "review-scope":
                 result = review_scope(root, args.base)
             elif args.action == "preflight":

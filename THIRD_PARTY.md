@@ -35,3 +35,14 @@
 
 - https://docs.python.org/3/library/unittest.html
 - https://nodejs.org/api/test.html
+
+## 2026-11-02 추가 비교에서 참고한 원리
+
+아래 고정판을 읽고 기존 검사기·기록·학습 절차를 보완했다. 코드·SKILL·양식을 직접 복사하지 않았고 추가 패키지·모델·설치기를 동봉하거나 실행하지 않는다. 이 목록은 해당 저장소의 공식 승인·동작 보증 또는 저장소 전체에 대한 재사용 허락을 뜻하지 않는다.
+
+- [ripplelover/cofa-ready-kit · b70748d](https://github.com/ripplelover/cofa-ready-kit/tree/b70748d1d6a0956eb8d41052b7ffd448766e5961): 다중 테스트 요약의 실패 보존과 데이터 결합/비율 확인 관점.
+- [suwonyoo/yoo-playbook · 308dc9d](https://github.com/suwonyoo/yoo-playbook/tree/308dc9df78691656c96e4f2c6407fa98e4cb1090): 원본 실행 로그의 보존·내용 일치 확인 관점.
+- [mmporong/kit · b103ed5](https://github.com/mmporong/kit/tree/b103ed5632abe4ebc679d7a029fca6cb37b06567), [Ju-unn/codex-lean-kit · 2970269](https://github.com/Ju-unn/codex-lean-kit/tree/2970269b4c400bfe7b56304df2b559b43fadf268): 자료의 뜻·계산 대상·예측 시점에 맞는 검증 선택.
+- [zittenyetten/cofa-probe-kit · 0b4a9b2](https://github.com/zittenyetten/cofa-probe-kit/tree/0b4a9b21d38f26935444fcea074b3fd39677c6e0), [jangabc3/cofa-kit · 2e8390f](https://github.com/jangabc3/cofa-kit/tree/2e8390ff4bae5637a6f32cf80b928dc902e8287d): 실제 제안·결정 주체·참가자 개입 사건 구분.
+- [NaYoung1017/my-cofa-plugin · aa89b3f](https://github.com/NaYoung1017/my-cofa-plugin/tree/aa89b3fd3887b5a26658c240e0e7a651845b7f8b): 같은 입력 한 건의 처리 과정을 따라가는 보충 학습 관점.
+- [bladem0117/cofa-kit · cef41cf](https://github.com/bladem0117/cofa-kit/tree/cef41cfa3ac628a784e2547a1bf04bd1da8f0be2), [AgenticLab-SH/sh-workflows · c5616c6](https://github.com/AgenticLab-SH/sh-workflows/tree/c5616c6adcbd6d513e1df1fc53b09e538e9db70b), [hyeongus2/codex-kit · e1f6acb](https://github.com/hyeongus2/codex-kit/tree/e1f6acbb473f3e321de2737b0e5167371bd6dc8d): 재개 시 상태 대조·실패 접근 전환·위임 파일 담당 관점.
