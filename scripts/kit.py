@@ -38,10 +38,10 @@ IGNORED_DIRS = {
 }
 BEGIN = "<!-- cofa-hackathon-kit:begin -->"
 END = "<!-- cofa-hackathon-kit:end -->"
-PRIVATE_PATHS = (".hackathon/private", ".hackathon/checks", ".hackathon/study", "private")
+PRIVATE_PATHS = (".hackathon/private", ".hackathon/checks", ".hackathon/study", "private", "docs/DEFENSE.md")
 PRIVATE_IGNORES = (
     "/.hackathon/private/", "/.hackathon/checks/", "/.hackathon/study/",
-    "/private/", "/PRIVATE*",
+    "/private/", "/PRIVATE*", "/docs/DEFENSE.md",
 )
 
 
@@ -185,6 +185,7 @@ def install(root, mode, requirements=None):
     plan(requirement_relative, (source / "templates/REQUIREMENTS.md").read_bytes(), preserve=True)
     for name in ["DECISIONS.md", "VERIFICATION.md"]:
         plan(f".hackathon/{name}", (source / "templates" / name).read_bytes(), preserve=True)
+    plan("docs/DEFENSE.md", (source / "docs/DEFENSE.md").read_bytes(), preserve=True)
     plan(".hackathon/private/INTERVIEWS.md", (
         "# 전달받은 고객 질문·답변 — 로컬 비공개\n\n"
         "아직 대화 기록 없음. 실제 전달받은 질문·답변만 Q번호로 남긴다. "
@@ -295,6 +296,10 @@ def fingerprint(root, for_checks=False, requirements=None):
             if name == ".DS_Store" or name.endswith((".pyc", ".pyo")):
                 continue
             relative = path.relative_to(root).as_posix()
+            # Updating a study index after a check must not invalidate that run.
+            # Full Q&A fingerprints still include DEFENSE, even though Git ignores it.
+            if for_checks and relative == "docs/DEFENSE.md":
+                continue
             if path.is_symlink():
                 files[relative] = "symlink:" + digest_bytes(os.readlink(path).encode())
             elif path.is_file():

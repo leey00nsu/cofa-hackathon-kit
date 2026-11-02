@@ -67,23 +67,62 @@ class KitTests(unittest.TestCase):
         kit.install(self.root, "none")
         raw = self.root / ".hackathon/private/INTERVIEWS.md"
         raw.write_text("EXAMPLE-Q1: fictional fixture, not a real customer answer.\n")
+        defense = self.root / "docs/DEFENSE.md"
+        defense.write_text("Fictional local implementation notes; not public evidence.\n")
         kit.install(self.root, "none")
         self.assertIn("EXAMPLE-Q1", raw.read_text())
+        self.assertEqual(defense.read_text(), "Fictional local implementation notes; not public evidence.\n")
         ignore = (self.root / ".gitignore").read_text()
         self.assertTrue(ignore.startswith("# Existing rules\ndata/\n!*.md\n"))
         self.assertEqual(ignore.count("# Cofa local private records"), 1)
         result = subprocess.run(
             ["git", "-C", str(self.root), "check-ignore", "--stdin"],
             input=".hackathon/private/INTERVIEWS.md\n.hackathon/checks/test.json\n"
-                  ".hackathon/study/qa.json\nprivate/notes.md\nPRIVATE_CUSTOMER_PERSONA.md\n",
+                  ".hackathon/study/qa.json\nprivate/notes.md\nPRIVATE_CUSTOMER_PERSONA.md\n"
+                  "docs/DEFENSE.md\n.hackathon/study/DEFENSE_REHEARSALS.md\n",
             text=True, capture_output=True, check=True,
         )
-        self.assertEqual(len(result.stdout.splitlines()), 5)
+        self.assertEqual(len(result.stdout.splitlines()), 7)
         subprocess.run(["git", "-C", str(self.root), "add", "."], check=True)
         tracked = subprocess.run(["git", "-C", str(self.root), "ls-files"],
                                  text=True, capture_output=True, check=True).stdout
         self.assertNotIn("INTERVIEWS.md", tracked)
+        self.assertNotIn("docs/DEFENSE.md", tracked)
         self.assertIn(".hackathon/REQUIREMENTS.md", tracked)
+
+    def test_install_preserves_existing_defense_before_first_install(self):
+        defense = self.root / "docs/DEFENSE.md"
+        defense.parent.mkdir()
+        original = b"# Fictional existing notes\nKeep the previous review.\n"
+        defense.write_bytes(original)
+        result = kit.install(self.root, "core")
+        self.assertEqual(defense.read_bytes(), original)
+        self.assertIn("docs/DEFENSE.md", result["preserved_ledgers"])
+
+    def test_install_refuses_tracked_defense_before_any_write(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        defense = self.root / "docs/DEFENSE.md"
+        defense.parent.mkdir()
+        original = b"Fictional tracked evidence to preserve.\n"
+        defense.write_bytes(original)
+        subprocess.run(["git", "-C", str(self.root), "add", "docs/DEFENSE.md"], check=True)
+        with self.assertRaisesRegex(kit.KitError, "이미 추적 중"):
+            kit.install(self.root, "none")
+        self.assertEqual(defense.read_bytes(), original)
+        self.assertFalse((self.root / "AGENTS.md").exists())
+        self.assertFalse((self.root / ".hackathon").exists())
+        self.assertFalse((self.root / ".gitignore").exists())
+
+    def test_defense_symlink_prevents_any_install_write(self):
+        outside = self.root / "original-notes.md"
+        outside.write_text("Original notes\n")
+        (self.root / "docs").mkdir()
+        (self.root / "docs/DEFENSE.md").symlink_to(outside)
+        with self.assertRaisesRegex(kit.KitError, "심볼릭"):
+            kit.install(self.root, "none")
+        self.assertFalse((self.root / ".hackathon").exists())
+        self.assertFalse((self.root / "AGENTS.md").exists())
+        self.assertEqual(outside.read_text(), "Original notes\n")
 
     def test_installed_guides_and_skill_references_are_self_contained(self):
         kit.install(self.root, "none")
@@ -96,10 +135,12 @@ class KitTests(unittest.TestCase):
         reference = skill / "references/qa-contract.md"
         self.assertTrue(reference.is_file())
         self.assertTrue((guides / "references/validation-tools.md").is_file())
+        defense = self.root / "docs/DEFENSE.md"
+        self.assertEqual(defense.read_bytes(), (KIT_PATH.parents[1] / "docs/DEFENSE.md").read_bytes())
         self.assertFalse((self.root / "maintainers").exists())
 
         # References must resolve in the installed workspace without the kit checkout.
-        documents = list(guides.rglob("*.md")) + list(skill.rglob("*.md"))
+        documents = list(guides.rglob("*.md")) + list(skill.rglob("*.md")) + [defense]
         linked = set()
         for document in documents:
             for target in re.findall(r"\[[^\]]+\]\(([^\s)]+)\)", document.read_text()):
@@ -112,6 +153,7 @@ class KitTests(unittest.TestCase):
                 linked.add(destination)
         self.assertIn(reference, linked)
         self.assertIn(guides / "references/validation-tools.md", linked)
+        self.assertIn(defense, linked)
 
     def test_install_refuses_already_tracked_private_files_before_any_write(self):
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
@@ -216,6 +258,18 @@ class KitTests(unittest.TestCase):
         self.complete_qa()
         kit.render_qa(self.root)
         (self.root / "src/rule.py").write_text("def total(values):\n    return 0\n")
+        with self.assertRaisesRegex(kit.KitError, "소스"):
+            kit.render_qa(self.root, verify_only=True)
+
+    def test_defense_change_invalidates_qa_but_rehearsal_notes_do_not(self):
+        kit.install(self.root, "none")
+        self.complete_qa()
+        kit.render_qa(self.root)
+        notes = self.root / ".hackathon/study/DEFENSE_REHEARSALS.md"
+        notes.write_text("Fictional participant response fixture, not a real rehearsal.\n")
+        self.assertEqual(kit.render_qa(self.root, verify_only=True)["status"], "verified")
+        defense = self.root / "docs/DEFENSE.md"
+        defense.write_text(defense.read_text() + "\nFictional changed explanation.\n")
         with self.assertRaisesRegex(kit.KitError, "소스"):
             kit.render_qa(self.root, verify_only=True)
 

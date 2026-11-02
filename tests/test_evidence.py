@@ -71,6 +71,27 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(result["status"], "FAIL")
         self.assertTrue(any("소스" in s for s in result["errors"]))
 
+    def test_verified_flow_stays_valid_after_defense_update_but_not_code_change(self):
+        # A real command in a fictional workspace exercises the post-feature loop.
+        kit.install(self.root, "none")
+        self.fixture()
+        record = self.run_example()
+        self.assertEqual(record["result"], "PASS")
+        self.write_requirement("Verified", actual="check:sum-01")
+        before = kit.fingerprint(self.root, for_checks=True)
+        defense = self.root / "docs/DEFENSE.md"
+        defense.write_text(
+            "# Fictional example only, not a customer implementation\n"
+            "R-001 / Q1: a, b -> src/total.py:total -> a + b.\n"
+            "check:sum-01; actual command: " + " ".join(record["command"]) + "\n"
+            "Actual result: PASS, one executed test. No type-validation claim.\n")
+        self.assertEqual(kit.fingerprint(self.root, for_checks=True), before)
+        self.assertEqual(kit.audit_requirements(self.root)["status"], "PASS")
+        # Exempt exactly the study index, not other docs or real product files.
+        (self.root / "docs/business-rule.py").write_text("LIMIT = 1\n")
+        self.assertNotEqual(kit.fingerprint(self.root, for_checks=True), before)
+        self.assertEqual(kit.audit_requirements(self.root)["status"], "FAIL")
+
     def test_acceptance_or_customer_correction_invalidates_binding(self):
         self.fixture()
         self.run_example()
