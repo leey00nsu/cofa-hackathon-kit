@@ -343,20 +343,24 @@ def requirement_rows(root, explicit=None):
     if not path.is_file():
         raise KitError("요구사항 문서 없음: " + path.relative_to(root).as_posix())
     rows, errors, columns = [], [], None
-    fenced = False
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    fenced = other_table = False
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for number, line in enumerate(lines, 1):
         if line.lstrip().startswith(("```", "~~~")):
             fenced = not fenced
             columns = None
+            other_table = False
             continue
         if fenced or not line.strip().startswith("|"):
             columns = None
+            other_table = False
             continue
         cells = [field_text(x.replace(r"\|", "|")) for x in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
         if all(re.fullmatch(r":?-+:?", c.replace(" ", "")) for c in cells):
             continue
         normalized = [re.sub(r"\s+", "", c).lower() for c in cells]
         if normalized[0] in REQUIREMENT_FIELDS["id"]:
+            other_table = False
             columns = {key: normalized.index(alias) for key, aliases in REQUIREMENT_FIELDS.items()
                        for alias in aliases if alias in normalized}
             width = len(cells)
@@ -370,6 +374,14 @@ def requirement_rows(root, explicit=None):
                 errors.append(f"행 {number}: 표 열 수 불일치. 셀 안의 |는 \\|로 작성")
                 continue
             rows.append({**{key: cells[index] for key, index in columns.items()}, "line": number})
+        elif not other_table:
+            if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*\d+", cells[0]):
+                errors.append(f"행 {number}: 요구사항 {cells[0]}에 연결된 표 머리글이 없음")
+            elif number < len(lines) and any(cells):
+                separator = lines[number].strip()
+                parts = [part.strip() for part in separator.strip("|").split("|")]
+                other_table = separator.startswith("|") and len(parts) == len(cells) and all(
+                    re.fullmatch(r":?-+:?", part.replace(" ", "")) for part in parts)
     return path, rows, errors
 
 
@@ -400,10 +412,16 @@ def customer_answers(root):
         found = re.match(r"^#{1,6}\s+Q(\d+)\b", title, re.I)
         if not found or re.search(r"대기|미수신|pending", title, re.I):
             continue
-        labeled = re.search(r"(?im)^\s*(?:답변|answer)\s*:\s*(.+)", body)
-        received = (re.search(r"답변|응답|answer", title, re.I) and body.strip()) or (
-            labeled and field_text(labeled[1]).lower() not in EMPTY
-            and not re.search(r"^(?:답변\s*)?대기|^pending|^미수신", labeled[1], re.I))
+        labeled = re.search(r"(?im)^[ \t]*(?:답변|answer)[ \t]*:[ \t]*", body)
+        if labeled:
+            # An explicit answer value takes precedence over an answer-like title.
+            # Keep multiline answers, including those starting on the next line.
+            first = next((line for line in body[labeled.end():].splitlines() if line.strip()), "")
+            value = field_text(first)
+            received = value.lower() not in EMPTY and not re.search(
+                r"^(?:답변\s*)?대기|^pending|^미수신|^(?:질문|메모|참고|상태|question|note|status)\s*:|^[-*_]{3,}$", value, re.I)
+        else:
+            received = re.search(r"답변|응답|answer", title, re.I) and body.strip()
         if received:
             key = str(int(found[1]))
             if key in answers:
@@ -561,7 +579,7 @@ def test_summary(command, output, runner):
             "node" if names[0] in {"node", "nodejs", "node.exe"} and "--test" in names else "none")
     text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", output)
     total = skipped = None
-    todo = cancelled = failed = 0
+    todo = cancelled = failed = expected_failed = unexpected_passed = 0
     ambiguous = False
     if runner == "unittest":
         ran = re.findall(r"(?m)^Ran (\d+) tests?\b", text)
@@ -569,9 +587,13 @@ def test_summary(command, output, runner):
             total = int(ran[-1])
             skipped_rows = re.findall(r"(?m)^(?:OK|FAILED)\s*\([^\n]*\bskipped=(\d+)", text)
             skipped = int(skipped_rows[-1]) if skipped_rows else 0
+            expected_rows = re.findall(r"(?m)^(?:OK|FAILED)\s*\([^\n]*\bexpected failures=(\d+)", text)
+            expected_failed = int(expected_rows[-1]) if expected_rows else 0
+            unexpected_rows = re.findall(r"(?m)^FAILED\s*\([^\n]*\bunexpected successes=(\d+)", text)
+            unexpected_passed = int(unexpected_rows[-1]) if unexpected_rows else 0
             problems = re.findall(r"(?m)^FAILED\s*\(([^\n]*)\)", text)
             if problems:
-                failed = sum(int(n) for n in re.findall(r"(?:failures|errors)=(\d+)", problems[-1]))
+                failed = sum(int(n) for n in re.findall(r"(?:^|,\s*)(?:failures|errors)=(\d+)", problems[-1])) + unexpected_passed
     elif runner == "pytest":
         groups = []
         for line in text.splitlines():
@@ -586,6 +608,7 @@ def test_summary(command, output, runner):
         ambiguous = len(groups) > 1
         if len(groups) == 1:
             total, skipped = sum(groups[0].values()), groups[0].get("skipped", 0)
+            expected_failed, unexpected_passed = groups[0].get("xfailed", 0), groups[0].get("xpassed", 0)
     elif runner == "node":
         groups, counts = [], {}
         for key, n in re.findall(r"(?m)^#\s+(tests|pass|fail|cancelled|skipped|todo)\s+(\d+)\s*$", text):
@@ -603,11 +626,13 @@ def test_summary(command, output, runner):
             total = sum(c["tests"] for c in groups)
             skipped = sum(c["skipped"] for c in groups)
             todo = sum(c["todo"] for c in groups)
-    effective = total - skipped - todo - cancelled if total is not None else None
+    effective = total - skipped - todo - cancelled - expected_failed - unexpected_passed if total is not None else None
     state = "NOT_APPLICABLE" if runner == "none" else "UNKNOWN" if total is None else (
+        "UNVERIFIED" if effective <= 0 and (expected_failed or unexpected_passed) else
         "NOT_RUN" if effective <= 0 else "RAN")
     return {"runner": runner, "state": state, "total": total, "skipped": skipped,
             "todo": todo, "cancelled": cancelled, "failed": failed, "effective": effective,
+            "expected_failed": expected_failed, "unexpected_passed": unexpected_passed,
             "ambiguous": ambiguous}
 
 
@@ -645,7 +670,7 @@ def record_check(root, check_id, command, timeout, runner="auto", requirement_id
     summary = test_summary(command, stdout + "\n" + stderr, runner)
     result = "FAIL" if summary["failed"] or summary["cancelled"] or exit_code and not (exit_code == 5 and summary["runner"] in {"pytest", "unittest"} and summary["state"] == "NOT_RUN") else (
         "NOT_RUN" if summary["state"] == "NOT_RUN" else
-        "UNVERIFIED" if before != after or summary["state"] == "UNKNOWN" else "PASS")
+        "UNVERIFIED" if before != after or summary["state"] in {"UNKNOWN", "UNVERIFIED"} else "PASS")
     record = {
         "schema_version": 3, "kind": "executed-command", "result": result,
         "id": check_id, "command": command, "cwd": ".", "started_at": started,
@@ -655,6 +680,8 @@ def record_check(root, check_id, command, timeout, runner="auto", requirement_id
         "log": log_path.relative_to(root).as_posix(), "tests": summary,
         "source_before": before, "source_after": after, "stable_source": before == after,
         "requirements": bindings,
+        "requirements_path": requirements_file(root, requirements).relative_to(root).as_posix()
+            if bindings or requirements else None,
     }
     # A test command can create files, so check the output route again afterwards.
     output = inside(root, f".hackathon/checks/{check_id}.json")
@@ -680,6 +707,8 @@ def record_manual(root, check_id, result, note, requirement_ids=(), requirements
               "result": result, "observer": "participant", "recorded_at": utc_now(),
               "note": note, "source_before": stamp, "source_after": stamp, "stable_source": True,
               "requirements": requirement_bindings(root, requirement_ids, requirements),
+              "requirements_path": requirements_file(root, requirements).relative_to(root).as_posix()
+                  if requirement_ids or requirements else None,
               "scope": "Participant reports this observation for the current source. No automated observation or browser action."}
     write_json(target, record)
     return record
@@ -859,7 +888,60 @@ def validate_qa(root):
     return data
 
 
-def render_content(root, data):
+def qa_check_evidence(root, data):
+    """Keep historical results distinct from their applicability to today's inputs."""
+    checks, sources, ledgers = {}, {}, {}
+    answers = None
+    for question in data["questions"]:
+        for check_id in question.get("check_ids", []):
+            if check_id in checks:
+                continue
+            record = load_json(inside(root, f".hackathon/checks/{check_id}.json"))
+            integrity = None if record.get("kind") == "participant-attestation" else execution_log_integrity(root, record)
+            if "stable_source" not in record or not record.get("source_after"):
+                freshness = {"status": "UNVERIFIED", "reason": "이전 기록: 현재 적용을 비교할 소스 지문 없음"}
+            else:
+                relative = record.get("requirements_path")
+                if relative is not None and not isinstance(relative, str):
+                    raise KitError(f"{check_id}: 요구사항 경로 형식이 잘못됨")
+                path = requirements_file(root, relative)
+                key = path.relative_to(root).as_posix()
+                if key not in sources:
+                    sources[key] = fingerprint(root, for_checks=True, requirements=key)["digest"]
+                if record.get("stable_source") is not True or record["source_after"] != sources[key]:
+                    freshness = {"status": "STALE", "reason": "과거 기록: 현재 소스와 다르거나 실행 중 변경됨"}
+                elif not isinstance(record.get("requirements"), dict):
+                    freshness = {"status": "UNVERIFIED", "reason": "이전 기록: 요구·수락 조건·고객 근거 연결 미확인"}
+                else:
+                    freshness = {"status": "CURRENT", "reason": "현재 소스와 연결된 요구·수락 조건·고객 근거 일치"}
+                    bindings = record["requirements"]
+                    if bindings:
+                        if key not in ledgers:
+                            if path.is_file():
+                                _, rows, errors = requirement_rows(root, key)
+                                ids = [row["id"].lower() for row in rows]
+                                if len(ids) != len(set(ids)):
+                                    errors.append("중복 요구사항 ID")
+                                ledgers[key] = ({row["id"]: row for row in rows}, errors)
+                            else:
+                                ledgers[key] = ({}, ["요구사항 문서 없음"])
+                        rows, errors = ledgers[key]
+                        if errors:
+                            freshness = {"status": "UNVERIFIED", "reason": "연결한 요구사항 문서 확인 필요: " + "; ".join(errors)}
+                        else:
+                            if answers is None:
+                                answers = customer_answers(root)
+                            if any(rid not in rows or binding_digest(rows[rid], answers) != digest
+                                   for rid, digest in bindings.items()):
+                                freshness = {"status": "STALE", "reason": "과거 기록: 연결한 요구·수락 조건·고객 근거가 바뀜"}
+                    else:
+                        freshness["reason"] = "현재 소스 일치; 요구사항 ID 연결은 없는 기록"
+            checks[check_id] = {"record": record, "integrity": integrity, "freshness": freshness}
+    return checks
+
+
+def render_content(root, data, checks=None):
+    checks = qa_check_evidence(root, data) if checks is None else checks
     warning = "과제 제출물 확정 전 복습용. 실제 출제 문항이 아니며, 확정 후에는 AI 사용을 중단하고 직접 답변한다.\n"
     full = ["# 구현 기반 예상 문답\n", warning,
             f"검토 시각: {data['reviewed_at']}\n소스 지문: `{data['source_fingerprint']}`\n"]
@@ -874,22 +956,30 @@ def render_content(root, data):
             link = "../../" + quote(ref["path"], safe="/")
             full.append(f"- [{label}]({link}): {ref['quote']}\n")
         for check_id in question.get("check_ids", []):
-            record = load_json(root / f".hackathon/checks/{check_id}.json")
+            record = checks[check_id]["record"]
             if record.get("kind") == "participant-attestation":
                 full.append(f"- 참가자 수동 진술 `{check_id}`: {record['result']}, {record['recorded_at']} · {record['note']}\n")
             else:
                 full.append(f"- 실행 `{check_id}`: {record.get('result', 'legacy/unassessed')}, exit={record['exit_code']}, {record['finished_at']}\n")
-                integrity = execution_log_integrity(root, record)
+                integrity = checks[check_id]["integrity"]
                 full.append(f"- 로그 보관 확인 `{check_id}`: {integrity['status']} · {integrity['reason']}\n")
+            freshness = checks[check_id]["freshness"]
+            full.append(f"- 현재 적용 확인 `{check_id}`: {freshness['status']} · {freshness['reason']}\n")
         full.append("\n한계: " + " / ".join(question["limitations"]) + "\n")
         if question["priority"] == "core":
             short.extend([heading, question["short_answer"] + "\n"])
+    for check_id, evidence in checks.items():
+        warnings = [value["reason"] for value in [evidence["freshness"], evidence["integrity"]]
+                    if value and value["status"] not in {"CURRENT", "PASS"}]
+        if warnings:
+            short.append(f"확인 필요 `{check_id}`: {' / '.join(warnings)}\n")
     return {"IMPLEMENTATION_QA.md": "\n".join(full), "LAST_REVIEW.md": "\n".join(short)}
 
 
 def render_qa(root, verify_only=False):
     data = validate_qa(root)
-    documents = render_content(root, data)
+    checks = qa_check_evidence(root, data)
+    documents = render_content(root, data, checks)
     for name, content in documents.items():
         target = inside(root, f".hackathon/study/{name}")
         if verify_only:
@@ -897,15 +987,14 @@ def render_qa(root, verify_only=False):
                 raise KitError(f"렌더 결과가 없거나 JSON과 다름: {name}. render-qa 필요")
         else:
             target.write_text(content, encoding="utf-8")
-    unverified = set()
-    for question in data["questions"]:
-        for check_id in question.get("check_ids", []):
-            record = load_json(inside(root, f".hackathon/checks/{check_id}.json"))
-            if record.get("kind") != "participant-attestation" and execution_log_integrity(root, record)["status"] == "UNVERIFIED":
-                unverified.add(check_id)
-    return {"status": "verified" if verify_only else "rendered", "questions": len(data["questions"]),
-            "unverified_log_ids": sorted(unverified),
-            "scope": "file fingerprint, references, log preservation, check records, and rendered document consistency only"}
+    unverified = sorted(key for key, value in checks.items() if value["integrity"] and value["integrity"]["status"] == "UNVERIFIED")
+    stale = sorted(key for key, value in checks.items() if value["freshness"]["status"] == "STALE")
+    unknown = sorted(key for key, value in checks.items() if value["freshness"]["status"] == "UNVERIFIED")
+    pending = bool(unverified or stale or unknown)
+    return {"status": ("unverified" if pending else "verified") if verify_only else "rendered",
+            "questions": len(data["questions"]), "evidence_status": "UNVERIFIED" if pending else "CURRENT",
+            "unverified_log_ids": unverified, "stale_check_ids": stale, "unverified_check_ids": unknown,
+            "scope": "file fingerprint, references, log preservation, recorded evidence freshness, and rendered document consistency only"}
 
 
 def main(argv=None):
@@ -974,6 +1063,8 @@ def main(argv=None):
                 result = prepare_qa(root)
             else:
                 result = render_qa(root, verify_only=args.action == "verify-qa")
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                return 2 if result["evidence_status"] != "CURRENT" else 0
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except (KitError, OSError, UnicodeError) as exc:

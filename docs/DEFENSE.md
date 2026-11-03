@@ -35,4 +35,6 @@
 
 참가자가 **“Q&A 리허설 시작”**이라고 하면 `$implementation-brief`의 [리허설 절차](../.agents/skills/implementation-brief/references/defense-rehearsal.md)를 따른다. 현재 구현을 조사해 질문 5개를 먼저 보여주고 답변을 기다린다. 기존 정답 포함 복습과 구분한다. 실제 AI 금지 평가에서는 이 모드를 사용하지 않는다.
 
+질문·회차·당시 근거·미응답 상태는 기존 Git 제외 `DEFENSE_REHEARSALS.md`에 먼저 남기며 이 빈 양식에 답을 채우지 않는다. 세션 재개에서도 답 숨김을 유지하고, 질문 후 관련 구현이 바뀌면 해당 문항은 평가를 보류해 새 전제로 다시 묻는다.
+
 오답 뒤 이해가 막힌 흐름만 같은 실제 입력 한 건으로 3~5단계 따라간다. 값의 변화와 실제 함수·파일을 연결하되, 실행 관찰·코드 해석·미확인을 구분한다. [보충 학습 절차](../.agents/skills/implementation-brief/references/defense-rehearsal.md#보충-학습답변-후)에 따라 설명 뒤 다른 입력으로 본인 설명을 다시 받는다. 원문 응답은 기존 Git 제외 복습 영역에 두고 이 파일에는 필요한 흐름 요약·근거만 남긴다.

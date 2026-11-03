@@ -46,3 +46,17 @@
 - [zittenyetten/cofa-probe-kit · 0b4a9b2](https://github.com/zittenyetten/cofa-probe-kit/tree/0b4a9b21d38f26935444fcea074b3fd39677c6e0), [jangabc3/cofa-kit · 2e8390f](https://github.com/jangabc3/cofa-kit/tree/2e8390ff4bae5637a6f32cf80b928dc902e8287d): 실제 제안·결정 주체·참가자 개입 사건 구분.
 - [NaYoung1017/my-cofa-plugin · aa89b3f](https://github.com/NaYoung1017/my-cofa-plugin/tree/aa89b3fd3887b5a26658c240e0e7a651845b7f8b): 같은 입력 한 건의 처리 과정을 따라가는 보충 학습 관점.
 - [bladem0117/cofa-kit · cef41cf](https://github.com/bladem0117/cofa-kit/tree/cef41cfa3ac628a784e2547a1bf04bd1da8f0be2), [AgenticLab-SH/sh-workflows · c5616c6](https://github.com/AgenticLab-SH/sh-workflows/tree/c5616c6adcbd6d513e1df1fc53b09e538e9db70b), [hyeongus2/codex-kit · e1f6acb](https://github.com/hyeongus2/codex-kit/tree/e1f6acbb473f3e321de2737b0e5167371bd6dc8d): 재개 시 상태 대조·실패 접근 전환·위임 파일 담당 관점.
+
+## 2026-11-03 추가 비교에서 참고한 원리
+
+아래 고정판의 일반 원리를 참고해 기존 안내를 독립 작성했다. 코드·SKILL·양식을 직접 복사하거나 동봉하지 않았다. 라이선스 미지정·NOASSERTION을 포함한 저장소의 공개 상태를 복사 허가로 해석하지 않으며, 작성자의 실행·호환성·점수 주장을 이 키트의 검증 결과로 사용하지 않는다. 비공개 자료·구체 과제 답안·새 설치기·외부 훅·모델은 가져오지 않는다.
+
+- [semobuilder/exam-solver · cba452d](https://github.com/semobuilder/exam-solver/tree/cba452d9441197c8d68bc0365d751982b817887e): 새 정보 없는 반복 질의의 종료, 저장/확정/후속/최종 접수 구분, 장애 관측·타이머 불일치 대응.
+- [arcturus0637-rgb/cofa-prelim-kit · 4e2300a](https://github.com/arcturus0637-rgb/cofa-prelim-kit/tree/4e2300ab02f91b50938aa7c0bf747a87a2249e44), [kane313759-netizen/Myskill · b4f4fee](https://github.com/kane313759-netizen/Myskill/tree/b4f4fee0d4fb8db8274164530d5f09cd2aeccb82): 최적화의 업무 근거·제약·종료 상태와 최적성 보장 범위.
+- [jui-ced/kit · 62af335](https://github.com/jui-ced/kit/tree/62af3352b8d9ad9e6c3a33c42a92c77da53a4a45), [song0328/cofa-workflow · d148c98](https://github.com/song0328/cofa-workflow/tree/d148c984314cbde68d44a602b73350faee5f0afa): 같은 조건의 유효한 기준선 비교와 품질·실측·한계 구분.
+- [MIIXmix/cofa-kit · b975af0](https://github.com/MIIXmix/cofa-kit/tree/b975af0f12b8af5ac3407b2b63093d1edc24fa56): 입력/설정 변경 뒤 결과의 기준과 늦은 응답 검증.
+- [HyeongiJeon/CodexHarness · d106c7b](https://github.com/HyeongiJeon/CodexHarness/tree/d106c7b26b31320cd741430a5ce4e3960531509f): 프로세스·포트·문서/자산/API 응답을 나누는 미리보기 장애 진단.
+- [hyeongus2/codex-kit · 9fd2591](https://github.com/hyeongus2/codex-kit/tree/9fd2591f2072c7a0e0ff05134b40e958181c5e01), [LSJ0621/task_workflow · 133469d](https://github.com/LSJ0621/task_workflow/tree/133469d6e3e5534f18ab69c54998c6f37501edfe): 파일 담당과 별개인 공유 의존성·실행환경 변경 조정.
+- [allsleep7610/hynix-hackathon-workflow · fb136df](https://github.com/allsleep7610/hynix-hackathon-workflow/tree/fb136dfc14fa0367ba6670179afdfe2389b6397c): 인계 위치와 같은 정본을 명시적으로 식별하는 관점.
+
+이번 검사기 수정은 현재 키트와 자체 가상 입력의 재현에서 도출했다. 외부 검사기 코드나 실제 고객 기록을 이식하지 않는다.
