@@ -17,6 +17,8 @@ description: Prepare evidence-based implementation Q&A before a Cofa hackathon s
 
 ## 복습 모드
 
+문제·필수 범위 설명은 기존 요구사항 정본의 문제/첫 흐름 요약을 출발점으로 삼고 실제 R·코드·검증과 대조한다. 첫 MVP와 최종 필수 범위를 구분하며 ‘고객 문제 → 필수 R → 실제 입력/처리/결과 → 결정 D·검증 V → 남은 한계’를 연결한다. 요약 문서의 완성이나 테스트 정상 종료만으로 필수 요구 완료를 주장하지 않는다. 새 PRD나 상태 표를 다시 만들지 않는다.
+
 1. 남은 작업 시간을 확인하고 새 기능 확장을 멈춘다. 공식 과제 README, 프로젝트 AGENTS, `.hackathon/INTERVIEW_PROTOCOL.md`, 요구사항·결정·검증 기록과 `docs/DEFENSE.md`의 관련 흐름을 읽는다. 기존 요구사항 정본은 설치 결과 또는 `.hackathon/install.json`의 `requirements_path`를 따른다. 탐색 표와 실제 고객 확인 답변을 점검하고, 묻지 않은 영역·미확인 규칙·확인했지만 미구현인 요구를 구분한다. 중요한 미확인은 남은 시간에 맞는 질문으로 제안하고 답을 받지 못하면 한계로 남긴다. 실제 구현 파일과 핵심 데이터 흐름을 확인한다. DEFENSE도 원본 코드·실행 기록과 대조하고 없는 DB·API·아키텍처·성능·테스트·결정 이유를 만들지 않는다. 시간과 규정이 우선이다.
 2. `.hackathon/AUTOMATED_TESTING.md`에 따라 현재 코드·수락 조건·환경에 유효한 최종 검사 근거가 있으면 재사용하고, 변경·실패·미검증 범위만 자동 검사·결함 수정·재실행한다. 설명 복습을 다시 요청했다는 이유로 전체 검사를 반복하지 않는다. `review-scope`로 미추적 파일까지 대상을 확인하고 `audit-requirements`로 장부 연결·최신성을 대조한다. 감사 PASS는 전체 요구 충족이나 의미적 정확성의 증명이 아니다. 실제 R별 최종 UI 확인 목록을 VERIFICATION에 모아 참가자에게 전달한다. 실제 결과 대기 중 문답 초안은 준비하되 관찰을 지어내지 않는다. UI 수정이 생기면 관련 자동 검사와 필요한 회귀·영향 UI를 재확인하고 최종 관찰을 문답에 반영한다. 실행 근거는 `python3 .hackathon/tools/kit.py check --workspace . --id <id> --requirement <R번호> -- <실제 명령 인자들>`로 기록한다. 실패·0건·전부 skip/todo·예상 실패만 있음·소스가 바뀐 근거를 통과로 설명하지 않는다. Browser는 참가자가 직접 확인한다.
 3. `python3 .hackathon/tools/kit.py prepare-qa --workspace .`로 처음 문답 파일을 만들고, 이미 있으면 보존하며 갱신한다. 이 스킬의 [문답 규약](references/qa-contract.md)을 읽어 `.hackathon/study/qa.json`을 실제 답변으로 채운다. 실행 명령의 상세가 필요하면 `.hackathon/references/validation-tools.md`의 해당 절만 참조한다.
