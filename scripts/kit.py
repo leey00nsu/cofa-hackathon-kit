@@ -190,6 +190,8 @@ def install(root, mode, requirements=None):
         plan(f".hackathon/{name}", (source / "docs" / name).read_bytes())
     plan(".hackathon/references/validation-tools.md",
          (source / "docs/references/validation-tools.md").read_bytes())
+    plan(".hackathon/references/orchestration.md",
+         (source / "docs/references/orchestration.md").read_bytes())
     plan(requirement_relative, (source / "templates/REQUIREMENTS.md").read_bytes(), preserve=True)
     for name in ["DECISIONS.md", "VERIFICATION.md"]:
         plan(f".hackathon/{name}", (source / "templates" / name).read_bytes(), preserve=True)

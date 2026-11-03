@@ -135,6 +135,10 @@ class KitTests(unittest.TestCase):
         reference = skill / "references/qa-contract.md"
         self.assertTrue(reference.is_file())
         self.assertTrue((guides / "references/validation-tools.md").is_file())
+        orchestration = guides / "references/orchestration.md"
+        self.assertTrue(orchestration.is_file())
+        self.assertEqual(orchestration.read_bytes(),
+                         (KIT_PATH.parents[1] / "docs/references/orchestration.md").read_bytes())
         defense = self.root / "docs/DEFENSE.md"
         self.assertEqual(defense.read_bytes(), (KIT_PATH.parents[1] / "docs/DEFENSE.md").read_bytes())
         self.assertFalse((self.root / "maintainers").exists())
@@ -153,6 +157,7 @@ class KitTests(unittest.TestCase):
                 linked.add(destination)
         self.assertIn(reference, linked)
         self.assertIn(guides / "references/validation-tools.md", linked)
+        self.assertIn(orchestration, linked)
         self.assertIn(defense, linked)
 
     def test_install_refuses_already_tracked_private_files_before_any_write(self):
