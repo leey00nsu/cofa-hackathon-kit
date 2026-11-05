@@ -26,6 +26,10 @@ python3 .hackathon/tools/kit.py check --workspace . --id tests-01 --requirement 
 
 새 명령 기록은 schema 3이며 실제로 닫은 전체 로그의 SHA-256을 `log_sha256`에 남긴다. 감사와 문답 검사는 실행 ID에 맞는 로그 경로·일반 파일 여부·실제 내용 지문을 확인한다. 누락·변경·잘못된 경로·심볼릭 링크·새 기록의 지문 누락은 거절한다. 로그와 JSON을 함께 바꾸는 조작까지 막는 전자서명은 아니다.
 
+JSON 기록의 같은 객체에 동일한 키가 두 번 있으면 마지막 값으로 덮어 읽지 않고 오류로 처리한다. 중첩 객체에도 적용하지만 서로 다른 객체에서 같은 키를 쓰는 것은 정상이다. 모호한 원본은 자동 수정하지 않고 보존하며 충돌 원인을 확인한다.
+
+unittest·pytest·Node의 여러 요약은 총건수로 합치지 않으며, 실패는 FAIL·실패 없는 모호한 실행은 UNVERIFIED로 기록한다. 이전 실행 JSON을 새 판정으로 소급 수정하지 않는다. 과거의 여러 요약을 현재 증명에 써야 한다면 원본을 보존하고 필요한 검사만 명확한 한 실행·새 ID로 수행한다.
+
 지문이 없는 schema 2 등 이전 기록은 수정하거나 현재 지문을 소급해서 채우지 않는다. 로그가 남아 있어도 내용 일치까지 새 방식으로 확인하지 못하면 `unverified_log_ids`와 경고로 표시하고 장부 감사는 UNVERIFIED(종료 2)다. 경로를 기록했던 로그가 사라졌으면 FAIL이다. 원래 실행 결과·장부는 그대로 보존한다. 문답은 이전 결과를 한계와 함께 복습할 수 있고, 렌더 문서와 반환값에 로그 검사 미확인을 표시한다. 이것을 완전한 근거 검증 완료로 설명하지 않는다. 수동 관찰은 별도 진술 기록이므로 log/hash를 요구하지 않는다.
 
 실행 지문은 준비 키트·설치 manifest에 등록된 스킬·장부/로그용 `.hackathon/`·로컬 tracker·기존 요구사항 정본·`docs/DEFENSE.md` 색인·일반 의존성/빌드 캐시를 제외한다. 새로 작성한 제품 스킬을 포함한 제품 파일·테스트·설정·그 외 입력 자료는 포함한다. 제품 코드를 장부 전용 경로에 두지 않는다. 요구·수락 조건·참조 고객 답변은 별도 연결 지문으로 비교한다. 상태 칸·Defense 설명을 갱신하거나 관계없는 Q를 추가하는 것만으로 이전 검증을 무효화하지 않는다. 문답 지문은 Defense를 포함하므로 설명 갱신 뒤 생성 문답은 재검토한다. 제품 파일 내용이 바뀌거나 실행 중 변경되면 다시 검사한다. 동일 내용으로 되돌아온 경우·제외한 파일·외부 환경의 모든 변화까지 탐지하는 보증은 아니다.
@@ -33,13 +37,13 @@ python3 .hackathon/tools/kit.py check --workspace . --id tests-01 --requirement 
 | 결과 | 의미 |
 | --- | --- |
 | PASS | 명령 성공, 지문 안정, 지원 테스트면 유효 실행 있음 |
-| FAIL | 원래 명령 실패/타임아웃 |
+| FAIL | 원래 명령 실패/타임아웃 또는 인식된 테스트 실패/cancelled |
 | NOT_RUN | 지원 테스트의 0건 또는 전부 skip/todo |
-| UNVERIFIED | 예상 실패/예상 밖 성공만 실행됨, 실행 중 소스 변경, runner 요약 미확인 또는 pytest 다중 요약의 집계 범위 불명확 |
+| UNVERIFIED | 예상 실패/예상 밖 성공만 실행됨, 실행 중 소스 변경, runner 요약 미확인 또는 여러 요약의 집계 범위 불명확 |
 
 unittest/pytest는 직접 명령과 `python -m` 호출에서 자동 인식한다. Node의 `node --test`도 인식하며 `--test-reporter=tap`의 요약을 읽는다. npm 등 wrapper는 `--test-runner node`를 명시하고 내부 runner에서 TAP을 출력한다. skip/todo/cancelled는 유효 실행에서 제외하며 실패/cancelled가 있으면 통과로 보지 않는다. wrapper가 실패를 출력하고 0을 반환해도 해당 기록은 FAIL이다. Node가 빈 파일 로드만 테스트 1건으로 집계할 수 있어 단순 import 성공은 기능 검증으로 삼지 않는다.
 
-pytest는 모든 인식된 요약의 실패/error를 보존한다. 여러 요약(0건 포함)은 서로 다른 실행·중복 출력일 수 있어 test total을 확정하지 않는다. 실패가 있으면 FAIL, 실패 없이 여러 요약이면 UNVERIFIED와 `tests.ambiguous=true`다. 실행을 별도 ID로 나누거나 한 번의 실제 runner를 집계하도록 명령을 고친다. 출력 채널의 순서로 마지막 성공만 고르지 않으며 원래 종료 코드는 유지한다.
+unittest·pytest·Node는 모든 인식된 요약의 실패/error를 보존한다. 여러 요약(0건 포함)은 서로 다른 실행·중복 출력일 수 있어 test total을 확정하지 않는다. 실패가 있으면 FAIL, 실패 없이 여러 요약이면 UNVERIFIED와 `tests.ambiguous=true`다. 실행을 별도 ID로 나누거나 한 번의 실제 runner를 집계하도록 명령을 고친다. 출력 채널의 순서로 마지막 성공만 고르지 않으며 원래 종료 코드는 유지한다.
 
 unittest의 `expectedFailure`와 pytest의 `xfailed`는 `tests.expected_failed`, 예상과 달리 성공한 경우는 `tests.unexpected_passed`로 따로 남기며 `effective`에서 제외한다. 이들만 있으면 실행은 있었지만 일반 성공 근거가 없어 UNVERIFIED다. unittest의 unexpected success처럼 runner가 실패로 다루는 결과는 FAIL을 유지한다. 일반 성공과 섞인 실행 전체가 PASS여도 예상 실패 수를 보존하며 그 수락 조건의 통과를 증명하지 않는다.
 

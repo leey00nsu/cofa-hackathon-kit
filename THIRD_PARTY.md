@@ -60,3 +60,15 @@
 - [allsleep7610/hynix-hackathon-workflow · fb136df](https://github.com/allsleep7610/hynix-hackathon-workflow/tree/fb136dfc14fa0367ba6670179afdfe2389b6397c): 인계 위치와 같은 정본을 명시적으로 식별하는 관점.
 
 이번 검사기 수정은 현재 키트와 자체 가상 입력의 재현에서 도출했다. 외부 검사기 코드나 실제 고객 기록을 이식하지 않는다.
+
+## 2026-11-05 추가 비교에서 참고한 원리
+
+아래 고정판을 비교해 기존 검사기와 인터뷰·검증·병렬 운영 지침을 보완했다. 코드·SKILL·양식을 직접 복사하지 않고 현재 코드와 명시적인 가상 입력에서 독립 구현·서술했다. 공개 상태를 재배포 허가로 간주하지 않으며 외부 앱·검사기·설치기·테스트를 실행하거나 동봉하지 않았다. 새 프레임워크·모델·브라우저 자동화는 추가하지 않는다.
+
+- [ripplelover/cofa-ready-kit · d6745cb](https://github.com/ripplelover/cofa-ready-kit/tree/d6745cbe30097ce2a5ccb5215ab2eb59387d30ed): 다중 테스트 요약의 불확실성·실패 보존, JSON 중복 키 거절. 현재 키트에 합성 입력을 넣어 재현한 동작을 기준으로 수정했다.
+- [zittenyetten/cofa-probe-lite · b2f4e4a](https://github.com/zittenyetten/cofa-probe-lite/tree/b2f4e4a46574f90f556fd43a4c0f691e3242b37d), [ApexIllumination/cofa-devdominics-revised · af873b8](https://github.com/ApexIllumination/cofa-devdominics-revised/tree/af873b8ff1d85034d480b4c5a241406ab7b11c53): 정정 원문 누적, 충돌의 대상·판본·결정 권한 확인.
+- [PKJthecreator/probe-kit · 0707ae3](https://github.com/PKJthecreator/probe-kit/tree/0707ae3a6e50c442374eb6fdbda606e0c645134f), [aeginventor/work-kit · caeba09](https://github.com/aeginventor/work-kit/tree/caeba091757ab3674ef1ae11af3b4b0ab71ff09a): CSV 구조 손실 검사, 실제 독립 검사기가 규칙 위반 복사본도 거절하는지 확인. 공백·식별자·중복 처리 정책은 가져오지 않는다.
+- [wonjangchoi/kit · d71f0cb](https://github.com/wonjangchoi/kit/tree/d71f0cbf51c6fa19835e879e57a9336627c13208), [hyeongus2/codex-kit · 54f12ef](https://github.com/hyeongus2/codex-kit/tree/54f12ef2df1880422b12213b342d870e8b78e6ce): 공유 변경 전 복구 기준·범위, 다른 작업자의 변경 보존.
+- [MIIXmix/cofa-kit · 4d0d2fa](https://github.com/MIIXmix/cofa-kit/tree/4d0d2fa5190350749818491b761f58c564669ffb), [taehyeong51/26_skhynix_hackerthon · 7e2d90a](https://github.com/taehyeong51/26_skhynix_hackerthon/tree/7e2d90a5b75f7d08d00bf51c0e62e7202a47d35a): 실제 배치와 API 요청 주소 대조, 핵심 화면의 상태·입력 유지·실패 뒤 다음 행동 확인.
+
+이 참고 목록은 공식 평가 배점·실환경 호환성·복구 성공·접근성 인증을 보증하지 않는다. 일반 운영 지침의 적용과 실제 고객 기능 검증 결과를 구분한다.

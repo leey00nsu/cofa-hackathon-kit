@@ -62,6 +62,41 @@ class EvidenceTests(unittest.TestCase):
         path.write_bytes(kit.json_bytes(data))
         return path
 
+    def test_duplicate_json_keys_are_rejected_without_rewriting_the_record(self):
+        path = self.root / "record.json"
+        for document in [
+            '{"result":"FAIL","result":"PASS"}',
+            '{"result":"PASS","result":"FAIL"}',
+            '{"schema_version":2,"schema_version":3}',
+            '{"requirements":{"R-001":"old","R-001":"new"}}',
+        ]:
+            with self.subTest(document=document):
+                path.write_text(document)
+                before = path.read_bytes()
+                with self.assertRaisesRegex(kit.KitError, "중복"):
+                    kit.load_json(path)
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_json_keys_in_separate_objects_and_valid_records_still_load(self):
+        path = self.root / "valid.json"
+        path.write_text('{"checks":[{"result":"PASS"},{"result":"FAIL"}],"note":"가상 기록"}')
+        self.assertEqual(kit.load_json(path), {
+            "checks": [{"result": "PASS"}, {"result": "FAIL"}], "note": "가상 기록"})
+
+    def test_audit_cli_rejects_duplicate_json_result_and_preserves_evidence(self):
+        self.fixture()
+        self.run_example()
+        self.write_requirement("Verified", actual="check:sum-01")
+        self.assertEqual(kit.audit_requirements(self.root)["status"], "PASS")
+        path = self.root / ".hackathon/checks/sum-01.json"
+        path.write_text(path.read_text().replace('"result": "PASS"', '"result": "FAIL", "result": "PASS"'))
+        before = path.read_bytes()
+        result = subprocess.run([sys.executable, str(SOURCE), "audit-requirements", "--workspace", str(self.root)],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "FAIL")
+        self.assertEqual(path.read_bytes(), before)
+
     def test_actual_customer_to_requirement_to_execution_and_read_only_audit(self):
         self.fixture()
         record = self.run_example()
@@ -308,7 +343,7 @@ class EvidenceTests(unittest.TestCase):
         self.assertNotEqual(kit.fingerprint(self.root, for_checks=True), before)
         self.assertEqual(kit.audit_requirements(self.root)["status"], "FAIL")
 
-    def test_acceptance_or_customer_correction_invalidates_binding(self):
+    def test_acceptance_or_altered_original_answer_invalidates_binding(self):
         self.fixture()
         self.run_example()
         self.write_requirement("Verified", acceptance="새 수락 조건", actual="check:sum-01")
@@ -318,6 +353,23 @@ class EvidenceTests(unittest.TestCase):
         raw.write_text(raw.read_text().replace("두 수의 합", "세 수의 합"))
         result = kit.audit_requirements(self.root)
         self.assertTrue(any("고객 근거" in s for s in result["errors"]))
+
+    def test_appended_correction_keeps_originals_and_requires_a_current_binding(self):
+        self.fixture()
+        self.run_example()
+        self.write_requirement("Verified", actual="check:sum-01")
+        raw = self.root / ".hackathon/private/INTERVIEWS.md"
+        original = raw.read_text()
+        raw.write_text(original + "\n## Q2\n정정 대상: Q1 (가상 기록)\n"
+                       "질문: 예시 표현을 정정하나요?\n답변: 두 정수의 합이라는 표현으로 정정합니다.\n")
+        self.write_requirement("Verified", source="Q1 Q2", actual="check:sum-01")
+        audit = kit.audit_requirements(self.root)
+        self.assertEqual(audit["status"], "FAIL")
+        self.assertTrue(any("고객 근거" in error for error in audit["errors"]))
+        self.assertEqual(self.run_example("sum-corrected")["result"], "PASS")
+        self.write_requirement("Verified", source="Q1 Q2", actual="check:sum-corrected")
+        self.assertEqual(kit.audit_requirements(self.root)["status"], "PASS")
+        self.assertTrue(raw.read_text().startswith(original))
 
     def test_new_unrelated_customer_answer_does_not_invalidate_existing_binding(self):
         self.fixture()
@@ -548,6 +600,89 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(record["tests"]["total"], 2)
         self.assertEqual(record["tests"]["effective"], 1)
         self.assertEqual(record["tests"]["expected_failed"], 1)
+
+    def test_unittest_multiple_runs_do_not_mix_success_and_prior_skips(self):
+        # Synthetic summaries exercise the recorder, not customer functionality.
+        output = "Ran 1 test in 0.01s\n\nOK (skipped=1)\nRan 2 tests in 0.01s\n\nOK\n"
+        record = kit.record_check(self.root, "unittest-multiple",
+            [sys.executable, "-c", f"print({output!r})"], 10, runner="unittest")
+        self.assertEqual(record["exit_code"], 0)
+        self.assertEqual(record["result"], "UNVERIFIED")
+        self.assertTrue(record["tests"]["ambiguous"])
+        self.assertIsNone(record["tests"]["total"])
+        self.assertIsNone(record["tests"]["effective"])
+        self.assertIn(output, (self.root / record["log"]).read_text())
+
+    def test_multiple_summaries_keep_failures_across_channels_and_order(self):
+        summaries = {
+            "unittest": ("Ran 1 test in 0.01s\nFAILED (failures=1)", "Ran 1 test in 0.01s\nOK"),
+            "node": ("# tests 1\n# pass 0\n# fail 1\n# skipped 0\n# todo 0",
+                     "# tests 1\n# pass 1\n# fail 0\n# skipped 0\n# todo 0"),
+        }
+        for runner, (failure, success) in summaries.items():
+            for index, (first, last) in enumerate([(failure, success), (success, failure)]):
+                with self.subTest(runner=runner, first=first):
+                    record = kit.record_check(self.root, f"{runner}-failure-{index}",
+                        [sys.executable, "-c", f"import sys; print({first!r}); print({last!r}, file=sys.stderr)"],
+                        10, runner=runner)
+                    self.assertEqual((record["exit_code"], record["result"]), (0, "FAIL"))
+                    self.assertEqual(record["tests"]["failed"], 1)
+                    self.assertTrue(record["tests"]["ambiguous"])
+                    self.assertIsNone(record["tests"]["total"])
+
+    def test_unittest_multiple_failures_do_not_select_only_the_last_run(self):
+        output = "Ran 2 tests in 0.01s\nFAILED (failures=2)\nRan 1 test in 0.01s\nFAILED (errors=1)"
+        record = kit.record_check(self.root, "multiple-failures",
+            [sys.executable, "-c", f"print({output!r})"], 10, runner="unittest")
+        self.assertEqual(record["result"], "FAIL")
+        self.assertEqual(record["tests"]["failed"], 3)
+        self.assertIsNone(record["tests"]["total"])
+
+    def test_truncated_unittest_failure_after_success_is_still_a_failure(self):
+        output = "Ran 1 test in 0.01s\nOK\nFAILED (failures=1"
+        record = kit.record_check(self.root, "truncated-unittest-failure",
+            [sys.executable, "-c", f"print({output!r})"], 10, runner="unittest")
+        self.assertEqual((record["exit_code"], record["result"]), (0, "FAIL"))
+        self.assertEqual(record["tests"]["failed"], 1)
+        self.assertIsNone(record["tests"]["total"])
+
+    def test_application_messages_are_not_unittest_outcomes(self):
+        output = "FAILED: invalid row\nOK: recovery message\nNO TESTS RAN: application notice\nRan 1 test in 0.01s\nOK"
+        record = kit.record_check(self.root, "application-messages",
+            [sys.executable, "-c", f"print({output!r})"], 10, runner="unittest")
+        self.assertEqual(record["result"], "PASS")
+        self.assertEqual(record["tests"]["effective"], 1)
+        self.assertFalse(record["tests"]["ambiguous"])
+
+    def test_incomplete_test_summaries_never_claim_a_pass(self):
+        cases = [
+            ("unittest", "Ran 1 test in 0.01s", "UNVERIFIED"),
+            ("unittest", "Ran 1 test in 0.01s\nNO TESTS RAN", "UNVERIFIED"),
+            ("unittest", "OK", "UNVERIFIED"),
+            ("unittest", "FAILED (errors=1)", "FAIL"),
+            ("node", "# tests 1\n# pass 1", "UNVERIFIED"),
+            ("node", "# tests 1\n# pass 1\n# fail 0\n# skipped 1\n# todo 0", "UNVERIFIED"),
+            ("node", "# fail 1\n# fail 0", "FAIL"),
+        ]
+        for index, (runner, output, expected) in enumerate(cases):
+            with self.subTest(runner=runner, output=output):
+                record = kit.record_check(self.root, f"incomplete-{index}",
+                    [sys.executable, "-c", f"print({output!r})"], 10, runner=runner)
+                self.assertEqual(record["result"], expected)
+
+    def test_multiple_summary_cli_is_unverified_and_preserves_child_exit_code(self):
+        summaries = {
+            "unittest": "Ran 1 test in 0.01s\nOK\nRan 1 test in 0.01s\nOK",
+            "node": "# tests 1\n# pass 1\n# fail 0\n# skipped 0\n# todo 0\n" * 2,
+        }
+        for runner, output in summaries.items():
+            with self.subTest(runner=runner):
+                result = subprocess.run([sys.executable, str(SOURCE), "check", "--workspace", str(self.root),
+                    "--id", "multiple-" + runner, "--test-runner", runner, "--", sys.executable, "-c",
+                    f"print({output!r})"], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                record = json.loads(result.stdout)
+                self.assertEqual((record["exit_code"], record["result"]), (0, "UNVERIFIED"))
 
     def test_pytest_native_summary_parser_with_ansi_and_deselection(self):
         summary = kit.test_summary(["pytest"], "\x1b[32m=== 2 passed, 1 skipped, 9 deselected in 0.12s ===\x1b[0m", "auto")

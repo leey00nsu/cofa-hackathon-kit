@@ -36,7 +36,30 @@ class AutomaticTestingTests(unittest.TestCase):
             "# tests 1\n# pass 0\n# fail 1\n# skipped 0\n# todo 0\n"
             "# tests 1\n# pass 1\n# fail 0\n# skipped 0\n# todo 0\n", "node")
         self.assertEqual(combined["failed"], 1)
-        self.assertEqual(combined["total"], 2)
+        self.assertIsNone(combined["total"])
+        self.assertTrue(combined["ambiguous"])
+
+    def test_node_multiple_footers_are_unverified_not_a_combined_success(self):
+        # Synthetic TAP summaries: no Node runtime or customer feature is exercised.
+        footer = "# tests 1\n# pass 1\n# fail 0\n# skipped 0\n# todo 0\n"
+        import sys
+        record = kit.record_check(self.root, "repeated-tap",
+            [sys.executable, "-c", f"print({(footer * 2)!r})"], 10, runner="node")
+        self.assertEqual(record["exit_code"], 0)
+        self.assertEqual(record["result"], "UNVERIFIED")
+        self.assertTrue(record["tests"]["ambiguous"])
+        self.assertIsNone(record["tests"]["total"])
+        self.assertIsNone(record["tests"]["effective"])
+        self.assertIn(footer * 2, (self.root / record["log"]).read_text())
+
+    def test_node_run_headers_prevent_merging_incomplete_summaries(self):
+        output = "TAP version 13\n# tests 1\n# pass 1\nTAP version 13\n# fail 0\n# skipped 0\n# todo 0"
+        import sys
+        record = kit.record_check(self.root, "split-tap-summaries",
+            [sys.executable, "-c", f"print({output!r})"], 10, runner="node")
+        self.assertEqual((record["exit_code"], record["result"]), (0, "UNVERIFIED"))
+        self.assertTrue(record["tests"]["ambiguous"])
+        self.assertIsNone(record["tests"]["total"])
 
     @unittest.skipUnless(NODE, "Node unavailable; native runtime behavior not verified")
     def test_real_node_mixed_empty_and_pending_runs(self):

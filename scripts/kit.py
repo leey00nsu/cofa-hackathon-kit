@@ -70,9 +70,17 @@ def json_bytes(value):
 
 
 def load_json(path):
+    def unique_object(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("중복 JSON 키: " + key)
+            value[key] = item
+        return value
+
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_object)
+    except (OSError, ValueError) as exc:
         raise KitError(f"JSON을 읽을 수 없음: {path}: {exc}") from exc
 
 
@@ -585,17 +593,24 @@ def test_summary(command, output, runner):
     ambiguous = False
     if runner == "unittest":
         ran = re.findall(r"(?m)^Ran (\d+) tests?\b", text)
-        if ran:
-            total = int(ran[-1])
-            skipped_rows = re.findall(r"(?m)^(?:OK|FAILED)\s*\([^\n]*\bskipped=(\d+)", text)
-            skipped = int(skipped_rows[-1]) if skipped_rows else 0
-            expected_rows = re.findall(r"(?m)^(?:OK|FAILED)\s*\([^\n]*\bexpected failures=(\d+)", text)
-            expected_failed = int(expected_rows[-1]) if expected_rows else 0
-            unexpected_rows = re.findall(r"(?m)^FAILED\s*\([^\n]*\bunexpected successes=(\d+)", text)
-            unexpected_passed = int(unexpected_rows[-1]) if unexpected_rows else 0
-            problems = re.findall(r"(?m)^FAILED\s*\(([^\n]*)\)", text)
-            if problems:
-                failed = sum(int(n) for n in re.findall(r"(?:^|,\s*)(?:failures|errors)=(\d+)", problems[-1])) + unexpected_passed
+        fields = "failures|errors|skipped|expected failures|unexpected successes"
+        groups = []
+        for status, details in re.findall(r"(?m)^(OK|FAILED|NO TESTS RAN)(?=[ \t]*(?:\(|$))([^\n]*)", text):
+            pairs = re.findall(rf"(?:^\s*\(?|,\s*)({fields})=(\d+)", details)
+            counts = {key: int(n) for key, n in pairs}
+            complete = bool(re.fullmatch(
+                rf"[ \t]*(?:\((?:{fields})=\d+(?:,[ \t]*(?:{fields})=\d+)*\))?[ \t]*", details))
+            groups.append((status, counts, complete and len(pairs) == len(counts)))
+        # Retain every failure even if a wrapper drops child exit codes or summaries.
+        failed = sum(max(int(status == "FAILED"), sum(counts.get(key, 0) for key in
+                     ("failures", "errors", "unexpected successes"))) for status, counts, _ in groups)
+        ambiguous = len(ran) > 1 or len(groups) > 1
+        if len(ran) == len(groups) == 1 and groups[0][2] and (groups[0][0] != "NO TESTS RAN" or ran[0] == "0"):
+            total = int(ran[0])
+            counts = groups[0][1]
+            skipped = counts.get("skipped", 0)
+            expected_failed = counts.get("expected failures", 0)
+            unexpected_passed = counts.get("unexpected successes", 0)
     elif runner == "pytest":
         groups = []
         for line in text.splitlines():
@@ -613,8 +628,19 @@ def test_summary(command, output, runner):
             expected_failed, unexpected_passed = groups[0].get("xfailed", 0), groups[0].get("xpassed", 0)
     elif runner == "node":
         groups, counts = [], {}
-        for key, n in re.findall(r"(?m)^#\s+(tests|pass|fail|cancelled|skipped|todo)\s+(\d+)\s*$", text):
-            if key == "tests" and counts:
+        tap_headers = 0
+        for line in text.splitlines():
+            if re.fullmatch(r"TAP version \d+\s*", line):
+                tap_headers += 1
+                if counts:
+                    groups.append(counts)
+                    counts = {}
+                continue
+            footer = re.fullmatch(r"#\s+(tests|pass|fail|cancelled|skipped|todo)\s+(\d+)\s*", line)
+            if not footer:
+                continue
+            key, n = footer.groups()
+            if key in counts:
                 groups.append(counts)
                 counts = {}
             counts[key] = int(n)
@@ -622,12 +648,11 @@ def test_summary(command, output, runner):
             groups.append(counts)
         failed = sum(c.get("fail", 0) for c in groups)
         cancelled = sum(c.get("cancelled", 0) for c in groups)
+        ambiguous = len(groups) > 1 or tap_headers > 1
         required = {"tests", "pass", "fail", "skipped", "todo"}
-        if groups and all(required <= c.keys() and c["tests"] == sum(c.get(k, 0) for k in
-                ("pass", "fail", "cancelled", "skipped", "todo")) for c in groups):
-            total = sum(c["tests"] for c in groups)
-            skipped = sum(c["skipped"] for c in groups)
-            todo = sum(c["todo"] for c in groups)
+        if len(groups) == 1 and not ambiguous and required <= counts.keys() and counts["tests"] == sum(
+                counts.get(k, 0) for k in ("pass", "fail", "cancelled", "skipped", "todo")):
+            total, skipped, todo = counts["tests"], counts["skipped"], counts["todo"]
     effective = total - skipped - todo - cancelled - expected_failed - unexpected_passed if total is not None else None
     state = "NOT_APPLICABLE" if runner == "none" else "UNKNOWN" if total is None else (
         "UNVERIFIED" if effective <= 0 and (expected_failed or unexpected_passed) else
