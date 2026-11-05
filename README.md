@@ -2,6 +2,8 @@
 
 제공된 Codex로 고객 요구를 발견하고 구현·자동 검증한 뒤, **제출 전에 실제 구현의 예상 문답을 복습**하는 키트입니다. 문제별 제품 코드나 완성 답안은 포함하지 않습니다.
 
+새 웹 앱의 기본 스택은 **Next.js App Router + React + TypeScript + Tailwind CSS + shadcn/ui + PostgreSQL**입니다. DB 연결은 `pg`, 컨테이너 구성은 Docker Compose를 사용합니다. 정확한 패키지 버전과 잠금 파일을 준비하며, 당일 공식 지정 스택과 제공된 기존 프로젝트가 우선입니다. 공통 UI 부품·색상·간격·상태 표현을 준비하고 실제 화면의 읽기 쉬움과 조작은 최종 UI 확인에서 점검합니다.
+
 ## 당일 시작
 
 공식 README와 제공 파일을 확인한 뒤 **과제 작업 공간의 최상위 디렉터리**에서 실행합니다. 키트는 하위 폴더에 두어 공식 파일을 보존합니다.
@@ -19,6 +21,14 @@ $grill-with-docs .hackathon/START_PROMPT.md를 읽고 시작 지시에 따라 �
 ```
 
 이미 실행 중인 Codex에는 설치된 AGENTS를 다시 읽게 하거나 새 세션을 시작합니다. 스킬 호출이 지원되지 않으면 동봉한 SKILL.md를 읽어 진행하며 Codex를 업데이트하지 않습니다. 설치에는 Python 3.10+가 필요합니다. 제공 환경에 없다면 `.hackathon-kit/templates/AGENTS.md`와 시작 안내를 Codex에게 읽게 하고 기존 환경 안에서 필요한 파일을 배치합니다. 설치기는 네트워크 요청·패키지 설치·전역 설정 변경을 하지 않습니다.
+
+기존 앱이 없는 새 과제에서만 Codex가 환경·공식 조건을 확인한 뒤 아래 명령으로 빈 스타터를 배치합니다. `install`은 지침 설치이며 앱을 자동 생성하지 않습니다.
+
+```sh
+python3 .hackathon-kit/scripts/kit.py scaffold --workspace .
+```
+
+이 명령도 패키지 설치·Docker 실행을 하지 않고 기존 파일과 충돌하면 쓰기 전에 멈춥니다. 다음 실행 순서와 Node·DB·Docker 조건은 [스택과 실행 안내](docs/references/stack.md)를 따릅니다. 빈 앱과 DB 연결 성공은 과제 구현 완료가 아닙니다.
 
 ## 상황별 입력
 
@@ -66,6 +76,7 @@ PRD(무엇을 왜 만드는지 설명하는 문서)의 핵심은 기존 요구�
 - [인터뷰 절차](docs/INTERVIEW_PROTOCOL.md): 여섯 영역 탐색, 구현 진입, 구현 중 고객 확인.
 - [자동 검증](docs/AUTOMATED_TESTING.md): Matt TDD, 실제 함수/API/저장/업무 흐름 검사, 최종 UI 목록. 상세 CLI는 여기서 필요할 때 참조.
 - [메인의 병렬 운영](docs/references/orchestration.md): 작업 배정, 서브 질문 → 고객 답변 → 관련 작업 재개, CLI 대안, 결과 검토·통합. 나누거나 배정받을 때 참조.
+- [기본 스택과 실행](docs/references/stack.md): 빈 Next.js·PostgreSQL 스타터, Docker Compose와 실제 DB 검증. 새 앱 배치·DB·컨테이너 작업 때 참조.
 - [Q&A Defense](docs/DEFENSE.md): 작은 흐름 구현·자동 검증 뒤 처리 흐름·실제 함수·업무 규칙·자체 선택·검증·한계를 짧게 연결. 기존 R/D/V와 ADR을 참조하며 새 장부를 만들지 않습니다.
 
 운영·Matt 적용·Evidence 규칙은 설치되는 AGENTS에 모았습니다. 기존 요구사항 정본과 R번호를 유지하고 고객 Q → 요구·수락 조건 → 결정/실제 파일 → 실행 결과를 연결합니다. 원문·로그·복습본은 로컬 Git 제외 영역에 둡니다.

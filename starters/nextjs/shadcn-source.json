@@ -1,0 +1,87 @@
+{
+  "cli": {
+    "package": "shadcn",
+    "version": "4.23.0"
+  },
+  "commands": [
+    "npm exec --no -- shadcn init --preset nova --base radix --yes --no-monorepo",
+    "npm exec --no -- shadcn add button card badge input table alert --yes"
+  ],
+  "style": "radix-nova",
+  "documentation": [
+    "https://ui.shadcn.com/docs/installation/next",
+    "https://ui.shadcn.com/docs/tailwind-v4"
+  ],
+  "registry_components": [
+    {
+      "name": "button",
+      "url": "https://ui.shadcn.com/r/styles/radix-nova/button.json",
+      "sha256": "c07a8feb7b7ed07ad5279023e45ce23ed7b5b94c7dba3de5c08f30a2aa037de3",
+      "files": [
+        "registry/radix-nova/ui/button.tsx"
+      ],
+      "generated_path": "components/ui/button.tsx",
+      "generated_sha256": "08e5f87833c5db8436e89337ebde0f776bcdbf649d3de69fb89be6441ca2e366"
+    },
+    {
+      "name": "card",
+      "url": "https://ui.shadcn.com/r/styles/radix-nova/card.json",
+      "sha256": "acf04c936ab6b613ed761067d8c2963508ba0f009f2accf2565aa5c3aeb4c06a",
+      "files": [
+        "registry/radix-nova/ui/card.tsx"
+      ],
+      "generated_path": "components/ui/card.tsx",
+      "generated_sha256": "8ad3a18d36bda0598dc0e9aa96ea22854944d5443ee4946f1d173815e115375f"
+    },
+    {
+      "name": "badge",
+      "url": "https://ui.shadcn.com/r/styles/radix-nova/badge.json",
+      "sha256": "4c7eae206938e55350a0d506c7b35b4c20bfe8b0f51ad2883fd75d6d4a956c27",
+      "files": [
+        "registry/radix-nova/ui/badge.tsx"
+      ],
+      "generated_path": "components/ui/badge.tsx",
+      "generated_sha256": "59953420d01d23d172b4e32583426db153ff09226e2d460d53526b9f25282801"
+    },
+    {
+      "name": "input",
+      "url": "https://ui.shadcn.com/r/styles/radix-nova/input.json",
+      "sha256": "2a94c176dcab621485ad6f902ec9a8b928b1a380a13c196d467ae46923e49044",
+      "files": [
+        "registry/radix-nova/ui/input.tsx"
+      ],
+      "generated_path": "components/ui/input.tsx",
+      "generated_sha256": "75418e030b2a54dd017ac0f4588db4bbdbabca7525e88bbc9d84cb3e18bcb905"
+    },
+    {
+      "name": "table",
+      "url": "https://ui.shadcn.com/r/styles/radix-nova/table.json",
+      "sha256": "99e6991f093e71db516a0cc88395d862b713d2b40d309d78de6e11d122232da7",
+      "files": [
+        "registry/radix-nova/ui/table.tsx"
+      ],
+      "generated_path": "components/ui/table.tsx",
+      "generated_sha256": "749b0501e97591f8d7c9ef81366d636e4b47857a15a28e6cf3b87841232e74bf"
+    },
+    {
+      "name": "alert",
+      "url": "https://ui.shadcn.com/r/styles/radix-nova/alert.json",
+      "sha256": "aaa6f7ee84101a00522e70c60518c18a8dd65770f9066ce56b0b8c77804409af",
+      "files": [
+        "registry/radix-nova/ui/alert.tsx"
+      ],
+      "generated_path": "components/ui/alert.tsx",
+      "generated_sha256": "f253568242c1c69b343f12474002fdbe229f603158171c59e21c491ab79f2e6e"
+    }
+  ],
+  "license": {
+    "source": "https://raw.githubusercontent.com/shadcn-ui/ui/main/LICENSE.md",
+    "file": "SHADCN_LICENSE",
+    "sha256": "1564074e13439397221ffd522e2e504d56561994a23d371aa5e3ad43e4f5423f"
+  },
+  "local_changes": [
+    "Generated components remain unmodified.",
+    "Generated global CSS uses system fonts, a warm background and green primary/focus tokens.",
+    "The CLI-added next/font/google import was removed; there is no remote font build dependency."
+  ]
+}

@@ -43,6 +43,21 @@ PRIVATE_IGNORES = (
     "/.hackathon/private/", "/.hackathon/checks/", "/.hackathon/study/",
     "/private/", "/PRIVATE*", "/docs/DEFENSE.md",
 )
+NEXTJS_FILES = (
+    "package.json", "package-lock.json", "tsconfig.json", "next-env.d.ts",
+    "next.config.ts", "postcss.config.mjs", "eslint.config.mjs",
+    "app/layout.tsx", "app/page.tsx", "app/globals.css", "app/api/health/route.ts",
+    "lib/db.ts", "Dockerfile", "compose.yaml", ".dockerignore", ".env.example",
+    ".npmrc", "scripts/start.mjs", "tests/health.test.ts", "tests/server.ts",
+    "tests/database.ts", "pg-init/01-test-db.sql", "components.json", "lib/utils.ts",
+    "components/ui/alert.tsx", "components/ui/badge.tsx", "components/ui/button.tsx",
+    "components/ui/card.tsx", "components/ui/input.tsx", "components/ui/table.tsx",
+    "SHADCN_LICENSE", "shadcn-source.json",
+)
+NEXTJS_IGNORES = (
+    "node_modules/", ".next/", "coverage/", "*.tsbuildinfo",
+    ".env", ".env.*", "!.env.example",
+)
 
 
 class KitError(Exception):
@@ -200,6 +215,8 @@ def install(root, mode, requirements=None):
          (source / "docs/references/validation-tools.md").read_bytes())
     plan(".hackathon/references/orchestration.md",
          (source / "docs/references/orchestration.md").read_bytes())
+    plan(".hackathon/references/stack.md",
+         (source / "docs/references/stack.md").read_bytes())
     plan(requirement_relative, (source / "templates/REQUIREMENTS.md").read_bytes(), preserve=True)
     for name in ["DECISIONS.md", "VERIFICATION.md"]:
         plan(f".hackathon/{name}", (source / "templates" / name).read_bytes(), preserve=True)
@@ -279,6 +296,44 @@ def install(root, mode, requirements=None):
     return {"installed_skills": len(skill_sources), "preserved_ledgers": preserved,
             "requirements_path": requirement_relative,
             "next": "Read .hackathon/START_PROMPT.md in the provided Codex."}
+
+
+def scaffold(root):
+    """Copy only the reviewed starter inventory; do not install or run anything."""
+    source = repository_root()
+    if root.is_relative_to(source):
+        raise KitError("준비 레포 밖의 과제 작업 공간을 --workspace로 지정할 것")
+    plans = {}
+    for relative in NEXTJS_FILES:
+        original = inside(source, "starters/nextjs/" + relative)
+        if not original.is_file():
+            raise KitError(f"스타터 원본 누락: {relative}. 준비 레포의 scripts/kit.py로 실행할 것")
+        target = inside(root, relative)
+        content = original.read_bytes()
+        for parent in target.parents:
+            if parent == root:
+                break
+            if parent.exists() and not parent.is_dir():
+                raise KitError(f"기존 경로와 충돌. 아무 파일도 쓰지 않음: {relative}")
+        if target.exists() and (not target.is_file() or target.read_bytes() != content):
+            raise KitError(f"기존 앱과 충돌. 아무 파일도 쓰지 않음: {relative}. 기존 프로젝트를 유지할 것")
+        plans[target] = content
+    ignore_path = inside(root, ".gitignore")
+    if ignore_path.exists() and not ignore_path.is_file():
+        raise KitError(".gitignore가 파일이 아님. 아무 파일도 쓰지 않음")
+    ignore_text = ignore_path.read_text(encoding="utf-8") if ignore_path.exists() else ""
+    block = "# Cofa Next.js local files\n" + "\n".join(NEXTJS_IGNORES) + "\n"
+    if not ignore_text.endswith(block):
+        ignore_text += ("\n" if ignore_text and not ignore_text.endswith("\n") else "") + block
+    plans[ignore_path] = ignore_text.encode("utf-8")
+    # Validate all sources, destinations and collisions before creating directories.
+    for target, content in plans.items():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists() or target.read_bytes() != content:
+            target.write_bytes(content)
+    return {"stack": "nextjs-postgres", "copied_files": len(NEXTJS_FILES),
+            "scope": "empty app, DB connection health and Docker configuration; no customer features",
+            "next": "Read .hackathon/references/stack.md; installation, DB and Docker execution are separate checks."}
 
 
 def fingerprint(root, for_checks=False, requirements=None):
@@ -1027,7 +1082,7 @@ def render_qa(root, verify_only=False):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="action", required=True)
-    for action in ["install", "fingerprint", "check", "manual-check", "audit-requirements", "preflight", "review-scope", "prepare-qa", "render-qa", "verify-qa"]:
+    for action in ["install", "scaffold", "fingerprint", "check", "manual-check", "audit-requirements", "preflight", "review-scope", "prepare-qa", "render-qa", "verify-qa"]:
         sub = commands.add_parser(action)
         sub.add_argument("--workspace", default=".")
         if action == "install":
@@ -1061,6 +1116,8 @@ def main(argv=None):
                 raise KitError("작업 공간이 존재하지 않음")
             if args.action == "install":
                 result = install(root, args.matt, args.requirements)
+            elif args.action == "scaffold":
+                result = scaffold(root)
             elif args.action == "fingerprint":
                 result = fingerprint(root)
             elif args.action == "check":

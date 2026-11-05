@@ -72,3 +72,17 @@
 - [MIIXmix/cofa-kit · 4d0d2fa](https://github.com/MIIXmix/cofa-kit/tree/4d0d2fa5190350749818491b761f58c564669ffb), [taehyeong51/26_skhynix_hackerthon · 7e2d90a](https://github.com/taehyeong51/26_skhynix_hackerthon/tree/7e2d90a5b75f7d08d00bf51c0e62e7202a47d35a): 실제 배치와 API 요청 주소 대조, 핵심 화면의 상태·입력 유지·실패 뒤 다음 행동 확인.
 
 이 참고 목록은 공식 평가 배점·실환경 호환성·복구 성공·접근성 인증을 보증하지 않는다. 일반 운영 지침의 적용과 실제 고객 기능 검증 결과를 구분한다.
+
+
+## 기본 웹 앱 스타터의 공식 참고
+
+`starters/nextjs/`는 Next.js App Router·TypeScript·Tailwind·shadcn/ui·PostgreSQL의 빈 시작점이다. 패키지 원본을 vendor로 복사하지 않으며 직접 의존성의 정확한 버전과 전체 의존성 잠금은 해당 `package.json`·`package-lock.json`에 둔다. shadcn의 생성 컴포넌트 소스는 원본 MIT 고지를 `SHADCN_LICENSE`에 보존한다. 실제 고객 화면·업무 스키마·답안은 포함하지 않는다.
+
+- [Next.js 설치](https://nextjs.org/docs/app/getting-started/installation)·[자체 호스팅](https://nextjs.org/docs/app/guides/self-hosting): 실행 조건, App Router와 컨테이너 실행.
+- [Tailwind의 Next.js 설정](https://tailwindcss.com/docs/installation/framework-guides/nextjs): PostCSS 연결과 CSS 가져오기.
+- [shadcn/ui Next.js](https://ui.shadcn.com/docs/installation/next)·[Tailwind v4](https://ui.shadcn.com/docs/tailwind-v4): 생성 컴포넌트·공통 테마·호환 설정. 사용한 CLI와 컴포넌트 출처는 스타터의 고지에 기록한다.
+- [PostgreSQL 버전 정책](https://www.postgresql.org/support/versioning/)·[공식 이미지](https://hub.docker.com/_/postgres): 지원되는 버전과 볼륨·초기화 경로.
+- [Docker Compose 준비 대기](https://docs.docker.com/compose/how-tos/startup-order/): DB 상태 검사와 앱 시작 순서.
+- [node-postgres 쿼리](https://node-postgres.com/features/queries)·[트랜잭션](https://node-postgres.com/features/transactions): 서버 DB 연결과 매개변수·동일 연결 사용.
+
+외부 안내의 브라우저 자동화·공개 배포·추가 스킬 설치 예시는 대회 지침에 자동 적용하지 않는다. 스타터 연결·빌드 검사와 실제 고객 업무 검증은 별개다.

@@ -2,6 +2,8 @@
 
 이 저장소는 대회 전 공개 준비물이다. 실제 과제·고객 사실·테스트 결과·최종 답안을 미리 만들어 넣지 않는다.
 
+새 웹 앱의 기본은 Next.js App Router·React·TypeScript·Tailwind·shadcn/ui·PostgreSQL이며 `starters/nextjs/`에는 빈 앱·공통 UI·연결 검사·Docker Compose만 둔다. 설치된 지침과 `.hackathon/references/stack.md`에서 공식 지정 스택·기존 앱 우선을 유지한다. 패키지의 정확한 버전·잠금 파일을 검증하고 실제 고객 기능·스키마는 넣지 않는다. `scaffold`는 명시된 파일만 배치하며 공식 README·AGENTS·기존 앱·개인 환경값을 덮어쓰지 않고 실행·네트워크 설치·Docker 기동을 수행하지 않는다. 앱의 검증과 준비 도구의 검증은 구분하며 실제 DB·컨테이너 실행을 확인하지 못하면 미실행으로 남긴다. shadcn 생성 소스의 출처·라이선스를 보존하고 공통 테마·간격·상태·접근성 기준은 같은 스택 안내와 기존 최종 UI 목록에서 확인한다.
+
 작업 전에 당일 개발 규칙의 정본인 `templates/AGENTS.md`를 읽는다. 필요한 스킬만 사용한다. `vendor/`는 고정 원본이며 수정 시 출처와 해시를 갱신한다. 제공된 Codex를 업데이트하거나 외부 모델을 연결하는 설치 흐름을 추가하지 않는다.
 
 준비 도구를 바꾸면 `python3 -m unittest discover -s tests -v`와 `python3 scripts/kit.py verify-vendor`로 확인한다. 브라우저 자동 조작은 사용하지 않는다.
